@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventario en Bodega — Parsons CNC</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #060c18;
+      --surface:    #0f172a;
+      --card:       #1e293b;
+      --border:     #263349;
+      --cnc:        #3b82f6;
+      --cnc-light:  #60a5fa;
+      --conv:       #10b981;
+      --conv-light: #34d399;
+      --amber:      #f59e0b;
+      --amber-light:#fbbf24;
+      --text:       #e2e8f0;
+      --muted:      #64748b;
+      --soft:       #94a3b8;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── LOADING ── */
+    #loader {
+      position: fixed; inset: 0; z-index: 200;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+    }
+    #loader.hidden { display: none; }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 4px solid var(--border);
+      border-top-color: var(--cnc);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text { color: var(--muted); font-size: .9rem; letter-spacing: .05em; }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, #0c1628 0%, var(--surface) 100%);
+      border-bottom: 2px solid var(--cnc);
+      padding: 12px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .brand-title {
+      font-size: 1.5rem; font-weight: 800; letter-spacing: .06em; color: #f8fafc;
+    }
+    .brand-title span { color: var(--cnc-light); }
+    .brand-sub { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-top: 2px; }
+    .clock { text-align: right; }
+    .clock-time { font-size: 2rem; font-weight: 700; color: #f8fafc; line-height: 1; font-variant-numeric: tabular-nums; }
+    .clock-date { font-size: .75rem; color: var(--soft); margin-top: 2px; text-transform: capitalize; }
+
+    /* ── ERROR ── */
+    #errorBanner {
+      display: none;
+      margin: 8px 28px 0;
+      background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.35);
+      color: #fca5a5;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: .8rem;
+      flex-shrink: 0;
+    }
+
+    /* ── STATS ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 10px 28px;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .stat {
+      background: var(--card);
+      border-radius: 8px;
+      padding: 10px 16px;
+      border-left: 4px solid;
+    }
+    .stat.s1 { border-color: var(--cnc); }
+    .stat.s2 { border-color: var(--cnc-light); }
+    .stat.s3 { border-color: var(--conv); }
+    .stat.s4 { border-color: var(--conv-light); }
+    .stat-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 2px; }
+    .stat-num   { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+    .s1 .stat-num, .s2 .stat-num { color: var(--cnc-light); }
+    .s3 .stat-num, .s4 .stat-num { color: var(--conv-light); }
+
+    /* ── PANELS ── */
+    .panels {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 0 28px 10px;
+      min-height: 0;
+    }
+    .panel {
+      background: var(--card);
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    /* panel header */
+    .panel-head {
+      padding: 10px 16px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .panel-head.cnc-head  { background: linear-gradient(135deg, #1c3357 0%, var(--card) 100%); }
+    .panel-head.conv-head { background: linear-gradient(135deg, #053d2e 0%, var(--card) 100%); }
+    .panel-icon { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: .9rem; }
+    .cnc-head  .panel-icon { background: rgba(59,130,246,.2); }
+    .conv-head .panel-icon { background: rgba(16,185,129,.2); }
+    .panel-title { font-size: .95rem; font-weight: 700; letter-spacing: .04em; }
+    .cnc-head  .panel-title { color: var(--cnc-light); }
+    .conv-head .panel-title { color: var(--conv-light); }
+    .panel-badge { margin-left: auto; font-size: .7rem; background: rgba(255,255,255,.06); padding: 3px 10px; border-radius: 20px; color: var(--soft); }
+
+    /* column headers */
+    .col-head {
+      display: grid;
+      grid-template-columns: 1fr 52px 128px;
+      padding: 7px 16px;
+      background: var(--surface);
+      font-size: .65rem;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .col-head span:nth-child(2),
+    .col-head span:nth-child(3) { text-align: center; }
+
+    /* ── SCROLL VIEWPORT ── */
+    .scroll-viewport {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+    }
+
+    /* scroll track — posición controlada por JS (RAF) para sincronía exacta */
+    .scroll-track {
+      display: flex;
+      flex-direction: column;
+      will-change: transform;
+    }
+
+    /* data rows (div-based, no table) */
+    .data-row {
+      display: grid;
+      grid-template-columns: 1fr 52px 128px;
+      padding: 9px 16px;
+      border-bottom: 1px solid rgba(38,51,73,.55);
+      align-items: center;
+      min-height: 38px;
+    }
+    .data-row.arriving { background: rgba(245,158,11,.07); }
+
+    .model-name { font-weight: 600; font-size: .88rem; color: var(--text); word-break: break-word; }
+
+    .qty { font-size: 1rem; font-weight: 800; text-align: center; }
+    .qty.cnc  { color: var(--cnc-light); }
+    .qty.conv { color: var(--conv-light); }
+
+    .badge-cell { text-align: center; }
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: .7rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-arriving {
+      background: rgba(245,158,11,.18);
+      color: var(--amber-light);
+      border: 1px solid rgba(245,158,11,.3);
+    }
+    .badge-stock {
+      background: rgba(100,116,139,.12);
+      color: var(--muted);
+    }
+
+    /* hover pause — manejado por JS */
+    .scroll-viewport.hovered .scroll-track { opacity: 1; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 7px 28px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .72rem; color: var(--muted);
+      flex-shrink: 0;
+    }
+    .dot {
+      display: inline-block; width: 7px; height: 7px;
+      background: #22c55e; border-radius: 50%; margin-right: 6px;
+      animation: glow 2s ease-in-out infinite;
+    }
+    @keyframes glow {
+      0%,100% { opacity:1; box-shadow: 0 0 4px #22c55e; }
+      50%      { opacity:.3; box-shadow: none; }
+    }
+    footer span { color: var(--soft); }
+  </style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loader">
+  <div class="spinner"></div>
+  <div class="loader-text">Cargando inventario...</div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div class="brand-title"><span>PARSONS</span> CNC</div>
+    <div class="brand-sub">Inventario en Bodega &mdash; Stock disponible</div>
+  </div>
+  <div class="clock">
+    <div class="clock-time" id="clockTime">--:--</div>
+    <div class="clock-date" id="clockDate">--</div>
+  </div>
+</header>
+
+<div id="errorBanner"></div>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat s1"><div class="stat-label">Modelos CNC</div><div class="stat-num" id="statCncModels">--</div></div>
+  <div class="stat s2"><div class="stat-label">Unidades CNC</div><div class="stat-num" id="statCncUnits">--</div></div>
+  <div class="stat s3"><div class="stat-label">Modelos Convencional</div><div class="stat-num" id="statConvModels">--</div></div>
+  <div class="stat s4"><div class="stat-label">Unidades Convencional</div><div class="stat-num" id="statConvUnits">--</div></div>
+</div>
+
+<!-- PANELS -->
+<div class="panels">
+
+  <div class="panel">
+    <div class="panel-head cnc-head">
+      <div class="panel-icon">⚙️</div>
+      <div class="panel-title">MAQUINARIA CNC</div>
+      <div class="panel-badge" id="cncBadge">-- modelos</div>
+    </div>
+    <div class="col-head">
+      <span>Modelo</span><span>Cant.</span><span>Mes de Arribo</span>
+    </div>
+    <div class="scroll-viewport">
+      <div class="scroll-track" id="cncTrack"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head conv-head">
+      <div class="panel-icon">🔧</div>
+      <div class="panel-title">MAQUINARIA CONVENCIONAL</div>
+      <div class="panel-badge" id="convBadge">-- modelos</div>
+    </div>
+    <div class="col-head">
+      <span>Modelo</span><span>Cant.</span><span>Mes de Arribo</span>
+    </div>
+    <div class="scroll-viewport">
+      <div class="scroll-track" id="convTrack"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div><span class="dot"></span>Última actualización: <span id="lastUpdated">--</span></div>
+  <div>Próxima actualización en <span id="countdown">30:00</span></div>
+  <div>Pasa el cursor sobre una lista para pausar el scroll</div>
+</footer>
+
+<script>
+  const CSV_URL =
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQvxzNqqM8IkjchOeJ_BWKR6fU2PI3thw_Uwvz6AewqHbqajEQMR_gg665I6GsK-3xYgqXMAolNHEsb/pub?gid=1722100584&single=true&output=csv';
+
+  const REFRESH_MS  = 30 * 60 * 1000;
+  const SCROLL_PX_S = 34; // píxeles por segundo (28 × 1.2 = +20%)
+
+  let nextAt = Date.now() + REFRESH_MS;
+
+  /* ── CLOCK ── */
+  function tick() {
+    const now = new Date();
+    document.getElementById('clockTime').textContent =
+      now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('clockDate').textContent =
+      now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const rem = Math.max(0, nextAt - Date.now());
+    const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000);
+    document.getElementById('countdown').textContent =
+      String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }
+  setInterval(tick, 1000); tick();
+
+  /* ── CSV PARSER ── */
+  function parseCSV(raw) {
+    const rows = [];
+    const lines = raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const row = []; let field = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { inQ = !inQ; }
+        else if (c === ',' && !inQ) { row.push(field.trim()); field = ''; }
+        else { field += c; }
+      }
+      row.push(field.trim());
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  /* ── BADGE ── */
+  function badge(month) {
+    const m = (month || '').trim();
+    if (!m || m === '-') return '<span class="badge badge-stock">En bodega</span>';
+    return `<span class="badge badge-arriving">${m}</span>`;
+  }
+  function hasArrival(month) {
+    const m = (month || '').trim();
+    return m.length > 0 && m !== '-';
+  }
+
+  /* ── RAF SCROLL ENGINE — sincronía perfecta entre ambos paneles ── */
+  let rafId      = null;
+  let rafPos     = 0;       // posición compartida en px
+  let rafLastTs  = null;
+  let rafPaused  = false;
+  let cncHalfH   = 0;
+  let convHalfH  = 0;
+
+  function rafLoop(ts) {
+    rafId = requestAnimationFrame(rafLoop);
+    if (!rafLastTs) { rafLastTs = ts; return; }
+
+    if (!rafPaused) {
+      const dt = (ts - rafLastTs) / 1000; // delta en segundos
+      rafPos += SCROLL_PX_S * dt;
+    }
+    rafLastTs = ts;
+
+    const cncTrack  = document.getElementById('cncTrack');
+    const convTrack = document.getElementById('convTrack');
+
+    // Cada panel hace loop cuando llega a su propia mitad
+    if (cncHalfH  > 0) cncTrack .style.transform = `translateY(-${rafPos % cncHalfH }px)`;
+    if (convHalfH > 0) convTrack.style.transform = `translateY(-${rafPos % convHalfH}px)`;
+  }
+
+  function initScroll() {
+    cancelAnimationFrame(rafId);
+    rafPos    = 0;
+    rafLastTs = null;
+
+    ['cncTrack','convTrack'].forEach(id => {
+      const t = document.getElementById(id);
+      t.style.transform = '';
+      if (t.children.length === 0) return;
+      // Duplicar filas para loop seamless
+      t.innerHTML += t.innerHTML;
+    });
+
+    // Leer alturas DESPUÉS del paint
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const ct = document.getElementById('cncTrack');
+        const vt = document.getElementById('convTrack');
+        cncHalfH  = ct.scrollHeight / 2;
+        convHalfH = vt.scrollHeight / 2;
+
+        // Registrar hover para pausar
+        document.querySelectorAll('.scroll-viewport').forEach(vp => {
+          vp.onmouseenter = () => { rafPaused = true;  };
+          vp.onmouseleave = () => { rafPaused = false; rafLastTs = null; };
+        });
+
+        rafId = requestAnimationFrame(rafLoop);
+      });
+    });
+  }
+
+  /* ── RENDER ROWS ── */
+  function renderRows(trackId, rows, qtyClass) {
+    const track = document.getElementById(trackId);
+    track.style.transform = '';
+    track.innerHTML = '';
+    for (const [model, qty, month] of rows) {
+      const div = document.createElement('div');
+      div.className = 'data-row' + (hasArrival(month) ? ' arriving' : '');
+      div.innerHTML =
+        `<span class="model-name">${model}</span>` +
+        `<span class="qty ${qtyClass}">${qty || '—'}</span>` +
+        `<span class="badge-cell">${badge(month)}</span>`;
+      track.appendChild(div);
+    }
+  }
+
+  /* ── JSONP loader (funciona desde file:// Y https://) ── */
+  function fetchCSVJsonp(url) {
+    return new Promise((resolve, reject) => {
+      const cb  = '_csv_' + Date.now();
+      const el  = document.createElement('script');
+      const tid = setTimeout(() => { cleanup(); reject(new Error('Timeout')); }, 20000);
+      function cleanup() {
+        clearTimeout(tid); delete window[cb];
+        if (el.parentNode) el.parentNode.removeChild(el);
+      }
+      window[cb] = function(data) {
+        cleanup();
+        if (!data || !data.contents) { reject(new Error('Sin contenido en respuesta')); return; }
+        let contents = data.contents;
+        // allorigins puede devolver base64 ("data:...;base64,...")
+        if (contents.startsWith('data:')) {
+          const b64 = contents.split(',')[1];
+          contents = atob(b64);
+        }
+        resolve(contents);
+      };
+      el.onerror = () => { cleanup(); reject(new Error('Error al cargar script')); };
+      el.src = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url) + '&callback=' + cb;
+      document.head.appendChild(el);
+    });
+  }
+
+  async function fetchCSV() {
+    try {
+      const csv = await fetchCSVJsonp(CSV_URL);
+      if (csv && csv.includes(',')) return csv;
+    } catch (e) {
+      console.warn('JSONP falló, intentando fetch directo...', e);
+    }
+    const r = await fetch(CSV_URL + '&t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.text();
+  }
+
+  /* ── LOAD & RENDER ── */
+  async function load() {
+    const errBnr = document.getElementById('errorBanner');
+    try {
+      const text = await fetchCSV();
+
+      // Col 0=vacío, 1=CNC nombre, 2=CNC cant, 3=CNC mes,
+      // Col 4=vacío, 5=Conv nombre, 6=Conv cant, 7=Conv mes
+      // Primeras 3 filas = encabezados
+      const all = parseCSV(text).slice(3);
+
+      const cnc  = all
+        .filter(r => r[1] && r[1].trim() && r[1].trim() !== 'MAQUINA')
+        .map(r => [r[1].trim(), r[2]?r[2].trim():'', r[3]?r[3].trim():'']);
+
+      const conv = all
+        .filter(r => r[5] && r[5].trim() && r[5].trim() !== 'MAQUINA')
+        .map(r => [r[5].trim(), r[6]?r[6].trim():'', r[7]?r[7].trim():'']);
+
+      const cncUnits  = cnc .reduce((s,r) => s + (parseInt(r[1]) || 0), 0);
+      const convUnits = conv.reduce((s,r) => s + (parseInt(r[1]) || 0), 0);
+
+      document.getElementById('statCncModels') .textContent = cnc.length;
+      document.getElementById('statCncUnits')  .textContent = cncUnits;
+      document.getElementById('statConvModels').textContent = conv.length;
+      document.getElementById('statConvUnits') .textContent = convUnits;
+      document.getElementById('cncBadge')      .textContent = cnc.length  + ' modelos';
+      document.getElementById('convBadge')     .textContent = conv.length + ' modelos';
+
+      renderRows('cncTrack',  cnc,  'cnc');
+      renderRows('convTrack', conv, 'conv');
+
+      // Iniciar scroll sincronizado (RAF compartido)
+      initScroll();
+
+      document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString('es-MX');
+      nextAt = Date.now() + REFRESH_MS;
+      errBnr.style.display = 'none';
+
+    } catch (err) {
+      errBnr.textContent = '⚠ No se pudo actualizar el inventario: ' + err.message;
+      errBnr.style.display = 'block';
+      console.error(err);
+    } finally {
+      document.getElementById('loader').classList.add('hidden');
+    }
+  }
+
+  load();
+  setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
