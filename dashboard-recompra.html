@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Recompra — Parsons CNC</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0a0a0a;
+      --surface: #141414;
+      --border:  #1f1f1f;
+      --muted:   #555;
+      --green:   #22c55e;
+      --yellow:  #eab308;
+      --red:     #ef4444;
+      --purple:  #a855f7;
+      --cafe:    #c2783a;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: #e8e8e8;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 110%;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 14px 22px 10px;
+      gap: 10px;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────── */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .brand h1 {
+      font-size: clamp(1.1rem, 1.8vw, 1.5rem);
+      font-weight: 800;
+      letter-spacing: 4px;
+      color: #fff;
+    }
+    .brand p {
+      font-size: 0.57rem;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .header-right { text-align: right; }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.6rem;
+      letter-spacing: 2px;
+      color: var(--green);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+    #clock {
+      font-size: clamp(0.75rem, 1.1vw, 0.95rem);
+      color: #aaa;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── KPI ROW ─────────────────────────────────────────── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-card .accent {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      border-radius: 10px 10px 0 0;
+    }
+    .kpi-card .label {
+      font-size: 0.56rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .kpi-card .value {
+      font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+      font-weight: 900;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .c-green  .accent { background: var(--green);  }  .c-green  .value { color: var(--green);  }
+    .c-yellow .accent { background: var(--yellow); }  .c-yellow .value { color: var(--yellow); }
+    .c-red    .accent { background: var(--red);    }  .c-red    .value { color: var(--red);    }
+    .c-purple .accent { background: var(--purple); }  .c-purple .value { color: var(--purple); }
+    .c-cafe   .accent { background: var(--cafe);   }  .c-cafe   .value { color: var(--cafe);   }
+
+    /* KPI breakdown mini */
+    .kpi-breakdown { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+    .kpi-breakdown-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 2px 6px; background: #0d0d0d; border-radius: 4px;
+    }
+    .kpi-breakdown-name { font-size: 0.57rem; font-weight: 700; letter-spacing: 1px; color: #666; }
+    .kpi-breakdown-val  { font-size: 0.72rem; font-weight: 800; color: #fff; }
+
+    /* ── VENDOR SCROLL ───────────────────────────────────── */
+    .vendor-label {
+      font-size: 0.6rem;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .vendor-wrap {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+    }
+    /* fade-out top & bottom when scrolling */
+    .vendor-wrap::before,
+    .vendor-wrap::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 28px;
+      z-index: 10;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    .vendor-wrap.is-scrolling::before { opacity: 1; }
+    .vendor-wrap.is-scrolling::after  { opacity: 1; }
+    .vendor-wrap::before { top: 0;    background: linear-gradient(to bottom, var(--bg), transparent); }
+    .vendor-wrap::after  { bottom: 0; background: linear-gradient(to top,    var(--bg), transparent); }
+
+    .vendor-inner {
+      will-change: transform;
+    }
+    .vendor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      padding: 2px 2px 12px;
+    }
+
+    /* ── VENDOR CARD ─────────────────────────────────────── */
+    .v-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .v-card.has-criticos {
+      border-color: var(--red);
+      box-shadow: 0 0 0 1px var(--red), 0 0 24px #ef444422;
+      animation: pulse-border 2s ease-in-out infinite;
+    }
+    @keyframes pulse-border {
+      0%, 100% { box-shadow: 0 0 0 1px var(--red), 0 0 20px #ef444422; }
+      50%       { box-shadow: 0 0 0 1px var(--red), 0 0 42px #ef444444; }
+    }
+    .v-glow {
+      position: absolute;
+      top: -50px; right: -50px;
+      width: 160px; height: 160px;
+      border-radius: 50%;
+      opacity: 0.05;
+      pointer-events: none;
+    }
+    .v-name {
+      font-size: clamp(1.9rem, 3.2vw, 3rem);
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #fff;
+      line-height: 1;
+    }
+    .v-period {
+      font-size: 0.6rem;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    /* SEMAPHORE */
+    .semaphore { display: flex; align-items: center; gap: 14px; }
+    .sem-light {
+      width: 46px; height: 46px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .sem-light.green  { background: var(--green);  box-shadow: 0 0 22px #22c55e77; }
+    .sem-light.yellow { background: var(--yellow); box-shadow: 0 0 22px #eab30877; }
+    .sem-light.red    { background: var(--red);    box-shadow: 0 0 22px #ef444477; animation: pulse-red 1.5s ease-in-out infinite; }
+    .sem-light.gray   { background: #252525; }
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 22px #ef444477; }
+      50%       { box-shadow: 0 0 44px #ef4444cc; }
+    }
+    .sem-status {
+      font-size: clamp(0.9rem, 1.4vw, 1.1rem);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+    .sem-status.green  { color: var(--green);  }
+    .sem-status.yellow { color: var(--yellow); }
+    .sem-status.red    { color: var(--red);    }
+    .sem-status.gray   { color: var(--muted);  }
+    .sem-sub { font-size: 0.63rem; color: var(--muted); margin-top: 2px; }
+
+    /* CRITICAL ALERT */
+    .critico-alert {
+      display: flex; align-items: center; gap: 8px;
+      background: #1f0808;
+      border: 1px solid #ef444466;
+      border-radius: 7px;
+      padding: 6px 10px;
+      font-size: 0.72rem;
+      color: var(--red);
+      font-weight: 700;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    .critico-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+
+    /* PROGRESS BARS */
+    .bars { display: flex; flex-direction: column; gap: 7px; }
+    .bar-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+    .bar-lbl  { font-size: 0.59rem; color: var(--muted); }
+    .bar-pct  { font-size: 0.66rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .bar-track { height: 5px; background: #1e1e1e; border-radius: 99px; overflow: hidden; }
+    .bar-fill  { height: 100%; border-radius: 99px; }
+    .bar-fill.first  { background: var(--yellow); }
+    .bar-fill.second { background: var(--green);  }
+
+    /* STAT GRID */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      margin-top: auto;
+    }
+    .stat-box {
+      background: #0d0d0d;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 4px;
+      text-align: center;
+    }
+    .stat-box.full { grid-column: span 2; }
+    .stat-box.critico-box { border-color: #ef444444; background: #1a0808; }
+    .s-val { font-size: 1.05rem; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+    .s-val.red    { color: var(--red);    }
+    .s-val.green  { color: var(--green);  }
+    .s-val.yellow { color: var(--yellow); }
+    .s-val.muted  { color: var(--muted);  }
+    .s-lbl { font-size: 0.47rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+    /* ERROR BAR */
+    #status-bar {
+      display: none;
+      background: #1a0808;
+      border: 1px solid var(--red);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.75rem;
+      color: var(--red);
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <h1>PARSONS CNC</h1>
+      <p>Dashboard Recompra &mdash; Seguimiento Mensual</p>
+    </div>
+    <div class="header-right">
+      <div class="live-badge"><span class="live-dot"></span>En vivo &middot; actualiza cada 60 seg</div>
+      <div id="clock">Cargando&hellip;</div>
+    </div>
+  </header>
+
+  <div id="status-bar"></div>
+
+  <div class="kpi-row">
+    <div class="kpi-card c-purple">
+      <div class="accent"></div>
+      <div class="label">Potencial</div>
+      <div class="value" id="kpi-potencial">&mdash;</div>
+    </div>
+    <div class="kpi-card c-cafe">
+      <div class="accent"></div>
+      <div class="label">Futuro</div>
+      <div class="value" id="kpi-futuro">&mdash;</div>
+    </div>
+    <div class="kpi-card c-green">
+      <div class="accent"></div>
+      <div class="label">Contactado</div>
+      <div class="value" id="kpi-contactado">&mdash;</div>
+    </div>
+    <div class="kpi-card c-red">
+      <div class="accent"></div>
+      <div class="label">Sin Contactar</div>
+      <div class="value" id="kpi-sin">&mdash;</div>
+    </div>
+    <div class="kpi-card c-yellow">
+      <div class="accent"></div>
+      <div class="label">No Contest&oacute;</div>
+      <div class="value" id="kpi-nc">&mdash;</div>
+    </div>
+  </div>
+
+  <div class="vendor-label">Sem&aacute;foro de actividad &mdash; por vendedor (mes en curso)</div>
+
+  <div class="vendor-wrap" id="vendorWrap">
+    <div class="vendor-inner" id="vendorInner"></div>
+  </div>
+
+  <script>
+    // ── CONFIGURACIÓN ────────────────────────────────────────────────────────
+    const SHEET_ID      = '1CZhpo2mUtg7nps29nQ13kkxHsZ8jPl9J';
+    const GID           = '0';
+    const REFRESH_MS    = 60000;
+    const CRITICAL_DAYS = 5;
+    const T_GREEN       = 0.80;
+    const SCROLL_SPEED  = 0.5;    // px por frame (~30 px/seg a 60 fps)
+    const PAUSE_MS      = 1800;   // pausa al llegar al inicio/fin del loop
+
+    // ── ESTADO DEL SCROLL ────────────────────────────────────────────────────
+    let scrollPos  = 0;
+    let scrollRAF  = null;
+    let scrollPaused = false;
+
+    function stopScroll() {
+      if (scrollRAF) { cancelAnimationFrame(scrollRAF); scrollRAF = null; }
+    }
+
+    function startScroll(wrap, inner, singleH) {
+      stopScroll();
+      wrap.classList.add('is-scrolling');
+
+      function tick() {
+        if (scrollPaused) { scrollRAF = requestAnimationFrame(tick); return; }
+        scrollPos += SCROLL_SPEED;
+        if (scrollPos >= singleH) {
+          // Llegamos al clon — reset sin salto visible
+          scrollPos -= singleH;
+        }
+        inner.style.transform = `translateY(-${scrollPos}px)`;
+        scrollRAF = requestAnimationFrame(tick);
+      }
+      scrollRAF = requestAnimationFrame(tick);
+    }
+
+    // ── RELOJ ────────────────────────────────────────────────────────────────
+    const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    function tickClock() {
+      const n = new Date();
+      document.getElementById('clock').textContent =
+        `${n.getDate()} ${MONTHS[n.getMonth()]} ${n.getFullYear()} — ` +
+        `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+    }
+    setInterval(tickClock, 1000);
+    tickClock();
+
+    // ── FETCH ────────────────────────────────────────────────────────────────
+    async function loadSheet() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}&_=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      if (text.trim().startsWith('<')) throw new Error('Sheet no accesible — verifica que sea público');
+      return text;
+    }
+
+    // ── UTILIDADES ───────────────────────────────────────────────────────────
+    function norm(s) {
+      return String(s || '').trim().toUpperCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/\s+/g, ' ');
+    }
+    function daysUntilEndOfMonth() {
+      const now  = new Date();
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return Math.ceil((last - now) / 86400000);
+    }
+    function parseDate(v) {
+      if (!v) return null;
+      const s = String(v).trim();
+      if (!s) return null;
+      const p = s.split(/[\/\-]/);
+      if (p.length === 2) {
+        const d = new Date(new Date().getFullYear(), parseInt(p[1],10)-1, parseInt(p[0],10));
+        return isNaN(d.getTime()) ? null : d;
+      }
+      if (p.length === 3) {
+        let [a,b,c] = p.map(Number);
+        let day, mon, yr;
+        if (p[0].length === 4) { yr=a; mon=b; day=c; }
+        else { day=a; mon=b; yr=c; if (yr<100) yr+=2000; if (mon>12){const t=day;day=mon;mon=t;} }
+        const d = new Date(yr, mon-1, day);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    }
+    function esMismoMes(date) {
+      if (!date) return false;
+      const h = new Date();
+      return date.getMonth() === h.getMonth() && date.getFullYear() === h.getFullYear();
+    }
+
+    // ── CLASIFICAR CLIENTE ───────────────────────────────────────────────────
+    function clasificarCliente(f1, f2) {
+      const d1 = parseDate(f1), d2 = parseDate(f2);
+      const dl = daysUntilEndOfMonth();
+      const m1b15 = d1 && esMismoMes(d1) && d1.getDate() <= 15;
+      const m1any = d1 && esMismoMes(d1);
+      const m2ok  = d2 && esMismoMes(d2) && d2.getDate() > 15;
+      if (m1b15 && m2ok)                     return 'completo';
+      if (m1b15 && !m2ok && dl <= CRITICAL_DAYS) return 'critico';
+      if (m1any)                             return 'progreso';
+      return 'sin-contactar';
+    }
+
+    // ── MAPEO STATUS KPI ─────────────────────────────────────────────────────
+    function mapStatus(raw) {
+      const v = norm(raw);
+      if (v === 'POTENCIAL')         return 'potencial';
+      if (v === 'PROYECTO A FUTURO') return 'futuro';
+      if (v === 'CONTACTADO')        return 'contactado';
+      if (v === 'SIN CONTACTAR')     return 'sin';
+      if (v === 'NO CONTESTO')       return 'nc';
+      return null;
+    }
+
+    // ── CSV PARSER ───────────────────────────────────────────────────────────
+    function parseCSV(text) {
+      const rows = [];
+      for (const line of text.replace(/\r/g,'').split('\n')) {
+        if (!line.trim()) continue;
+        const cols = []; let cur = '', inQ = false;
+        for (const ch of line) {
+          if (ch === '"')              { inQ = !inQ; }
+          else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+          else                         { cur += ch; }
+        }
+        cols.push(cur.trim());
+        rows.push(cols);
+      }
+      return rows;
+    }
+
+    // ── PROCESAR DATOS ───────────────────────────────────────────────────────
+    function process(csvText) {
+      const rows = parseCSV(csvText);
+      if (rows.length < 2) throw new Error('El Sheet parece estar vacío');
+      const headers   = rows[0].map(norm);
+      const iStatus   = headers.findIndex(h => h === 'STATUS');
+      const iFecha1   = headers.findIndex(h => h.includes('1ER') || h.includes('PRIMER'));
+      const iFecha2   = headers.findIndex(h => h.includes('2DO') || h.includes('SEGUNDO'));
+      const iVendedor = headers.findIndex(h => h === 'VENDEDOR');
+      if (iStatus < 0 || iVendedor < 0) throw new Error(`Columnas no encontradas: ${headers.join(', ')}`);
+
+      const kpi    = { potencial:0, futuro:0, contactado:0, sin:0, nc:0 };
+      const kpiByV = {};
+      const vmap   = {};
+
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || r.every(c => !c)) continue;
+        const vendedor = norm(r[iVendedor] || '');
+        if (!vendedor) continue;
+
+        const sk = mapStatus(r[iStatus] || '');
+        if (sk) kpi[sk]++;
+        if (!kpiByV[vendedor]) kpiByV[vendedor] = { potencial:0, futuro:0, contactado:0, sin:0, nc:0 };
+        if (sk) kpiByV[vendedor][sk]++;
+
+        const estado = clasificarCliente(
+          iFecha1 >= 0 ? r[iFecha1] : '',
+          iFecha2 >= 0 ? r[iFecha2] : ''
+        );
+        if (!vmap[vendedor]) vmap[vendedor] = { total:0, completo:0, critico:0, progreso:0, sinContactar:0, early_first:0 };
+        const vd = vmap[vendedor];
+        vd.total++;
+        vd[estado === 'sin-contactar' ? 'sinContactar' : estado]++;
+        const d1 = parseDate(iFecha1 >= 0 ? r[iFecha1] : '');
+        if (d1 && esMismoMes(d1) && d1.getDate() <= 15) vd.early_first++;
+      }
+      return { kpi, kpiByV, vmap };
+    }
+
+    // ── SEMÁFORO ─────────────────────────────────────────────────────────────
+    function semColor(vd) {
+      if (vd.critico > 0)                          return 'red';
+      if (vd.early_first === 0)                    return 'gray';
+      if (vd.completo / vd.early_first >= T_GREEN) return 'green';
+      return 'yellow';
+    }
+    const SEM_LABEL = { green:'En Meta', yellow:'En Progreso', red:'Alerta Crítica', gray:'Sin Actividad' };
+    const GLOW_COL  = { green:'#22c55e', yellow:'#eab308', red:'#ef4444', gray:'#333' };
+
+    // ── CONSTRUIR TARJETA ────────────────────────────────────────────────────
+    function buildCard(name, vd, period, daysLeft) {
+      const color = semColor(vd);
+      const pct1  = Math.round(vd.early_first / (vd.total || 1) * 100);
+      const pct2  = Math.round(vd.completo    / (vd.early_first || 1) * 100);
+
+      const card = document.createElement('div');
+      card.className = 'v-card' + (vd.critico > 0 ? ' has-criticos' : '');
+      card.innerHTML = `
+        <div class="v-glow" style="background:${GLOW_COL[color]}"></div>
+        <div>
+          <div class="v-name">${name}</div>
+          <div class="v-period">${period} &nbsp;&middot;&nbsp; ${daysLeft} d&iacute;as restantes</div>
+        </div>
+        <div class="semaphore">
+          <div class="sem-light ${color}"></div>
+          <div>
+            <div class="sem-status ${color}">${SEM_LABEL[color]}</div>
+            <div class="sem-sub">${pct2}% ciclos completos del mes</div>
+          </div>
+        </div>
+        ${vd.critico > 0 ? `
+        <div class="critico-alert">
+          <span class="critico-dot"></span>
+          ${vd.critico} cliente${vd.critico > 1 ? 's' : ''} sin 2do contacto &mdash; ${daysLeft} d&iacute;as para cierre
+        </div>` : ''}
+        <div class="bars">
+          <div>
+            <div class="bar-meta">
+              <span class="bar-lbl">1er contacto antes del d&iacute;a 15</span>
+              <span class="bar-pct" style="color:#eab308">${pct1}%</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill first" style="width:${pct1}%"></div></div>
+          </div>
+          <div>
+            <div class="bar-meta">
+              <span class="bar-lbl">Ciclos completos (1er + 2do)</span>
+              <span class="bar-pct" style="color:#22c55e">${pct2}%</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill second" style="width:${pct2}%"></div></div>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-box">
+            <div class="s-val green">${vd.completo}</div>
+            <div class="s-lbl">&#10003; Completo</div>
+          </div>
+          <div class="stat-box critico-box">
+            <div class="s-val red">${vd.critico}</div>
+            <div class="s-lbl">&#9888; Cr&iacute;tico</div>
+          </div>
+          <div class="stat-box">
+            <div class="s-val yellow">${vd.progreso}</div>
+            <div class="s-lbl">&#8635; En Progreso</div>
+          </div>
+          <div class="stat-box">
+            <div class="s-val muted">${vd.sinContactar}</div>
+            <div class="s-lbl">&#10007; Sin Contactar</div>
+          </div>
+          <div class="stat-box full">
+            <div class="s-val">${vd.total}</div>
+            <div class="s-lbl">Total clientes</div>
+          </div>
+        </div>`;
+      return card;
+    }
+
+    // ── RENDERIZAR ───────────────────────────────────────────────────────────
+    function render({ kpi, kpiByV, vmap }) {
+      // KPIs globales
+      document.getElementById('kpi-potencial').textContent  = kpi.potencial;
+      document.getElementById('kpi-futuro').textContent     = kpi.futuro;
+      document.getElementById('kpi-contactado').textContent = kpi.contactado;
+      document.getElementById('kpi-sin').textContent        = kpi.sin;
+      document.getElementById('kpi-nc').textContent         = kpi.nc;
+
+      // Desglose por vendedor
+      const kpiKeys = ['potencial','futuro','contactado','sin','nc'];
+      const kpiIds  = ['kpi-potencial','kpi-futuro','kpi-contactado','kpi-sin','kpi-nc'];
+      const vendedores = Object.keys(kpiByV).sort();
+      kpiKeys.forEach((key, idx) => {
+        const card = document.getElementById(kpiIds[idx]).closest('.kpi-card');
+        const old  = card.querySelector('.kpi-breakdown');
+        if (old) old.remove();
+        const bd = document.createElement('div');
+        bd.className = 'kpi-breakdown';
+        for (const vname of vendedores) {
+          const count = (kpiByV[vname]?.[key]) || 0;
+          const row = document.createElement('div');
+          row.className = 'kpi-breakdown-row';
+          row.innerHTML = `<span class="kpi-breakdown-name">${vname}</span><span class="kpi-breakdown-val">${count}</span>`;
+          bd.appendChild(row);
+        }
+        card.appendChild(bd);
+      });
+
+      // Grid de vendedores
+      const names    = Object.keys(vmap).sort();
+      const now      = new Date();
+      const period   = `${MONTHS[now.getMonth()].toUpperCase()} ${now.getFullYear()}`;
+      const daysLeft = daysUntilEndOfMonth();
+
+      stopScroll();
+      const wrap  = document.getElementById('vendorWrap');
+      const inner = document.getElementById('vendorInner');
+      inner.innerHTML = '';
+      inner.style.transform = 'translateY(0)';
+      scrollPos = 0;
+
+      // Grid original
+      const grid = document.createElement('div');
+      grid.className = 'vendor-grid';
+      for (const name of names) grid.appendChild(buildCard(name, vmap[name], period, daysLeft));
+      inner.appendChild(grid);
+
+      // Determinar si necesitamos scroll automático
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const wrapH  = wrap.clientHeight;
+          const gridH  = grid.scrollHeight;
+
+          if (gridH > wrapH) {
+            // Duplicar para loop sin salto
+            const clone = grid.cloneNode(true);
+            inner.appendChild(clone);
+            wrap.classList.add('is-scrolling');
+            startScroll(wrap, inner, gridH);
+          } else {
+            wrap.classList.remove('is-scrolling');
+          }
+        });
+      });
+    }
+
+    // ── LOOP PRINCIPAL ───────────────────────────────────────────────────────
+    async function refresh() {
+      const bar = document.getElementById('status-bar');
+      try {
+        const data = process(await loadSheet());
+        render(data);
+        bar.style.display = 'none';
+      } catch (err) {
+        bar.style.display = 'block';
+        bar.textContent   = `⚠ Error al cargar datos: ${err.message}`;
+        console.error(err);
+      }
+    }
+
+    refresh();
+    setInterval(refresh, REFRESH_MS);
+  </script>
+</body>
+</html>
