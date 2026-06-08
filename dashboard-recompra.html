@@ -270,6 +270,99 @@
     .bar-fill.first  { background: var(--yellow); }
     .bar-fill.second { background: var(--green);  }
 
+    /* META DIARIA + SEMANAL */
+    .goals-row {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 6px;
+    }
+    .daily-goal,
+    .week-goal {
+      background: #0d0d0d;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .week-goal { gap: 4px; justify-content: space-between; }
+    .week-goal .wg-title {
+      font-size: 0.56rem;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .week-goal .wg-main {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .week-goal .wg-num {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .week-goal .wg-sub {
+      font-size: 0.56rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .week-goal .wg-eff {
+      font-size: 0.62rem;
+      color: var(--green);
+      font-weight: 800;
+      margin-top: 2px;
+    }
+    .daily-goal.completed {
+      border-color: #22c55e44;
+      background: #081a0c;
+    }
+    .dg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .dg-title {
+      font-size: 0.6rem;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .dg-count {
+      font-size: 0.95rem;
+      font-weight: 900;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+    .dg-count .target { color: var(--muted); font-weight: 600; font-size: 0.78rem; }
+    .dg-count.done    { color: var(--green); }
+    .dg-track {
+      height: 7px;
+      background: #1e1e1e;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .dg-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #eab308, #22c55e);
+      transition: width 0.6s cubic-bezier(.4,0,.2,1);
+    }
+    .dg-extra {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.62rem;
+      color: var(--muted);
+    }
+    .dg-extra .ok { color: var(--green); font-weight: 800; }
+
     /* STAT GRID */
     .stat-grid {
       display: grid;
@@ -362,6 +455,7 @@
     const REFRESH_MS    = 60000;
     const CRITICAL_DAYS = 5;
     const T_GREEN       = 0.80;
+    const DAILY_GOAL    = 25;    // meta diaria de llamadas por vendedor
     const SCROLL_SPEED  = 0.5;    // px por frame (~30 px/seg a 60 fps)
     const PAUSE_MS      = 1800;   // pausa al llegar al inicio/fin del loop
 
@@ -448,6 +542,26 @@
       const h = new Date();
       return date.getMonth() === h.getMonth() && date.getFullYear() === h.getFullYear();
     }
+    function esHoy(date) {
+      if (!date) return false;
+      const h = new Date();
+      return date.getDate()     === h.getDate()
+          && date.getMonth()    === h.getMonth()
+          && date.getFullYear() === h.getFullYear();
+    }
+    // Semana de Lunes 00:00 a Domingo 23:59
+    function esEstaSemana(date) {
+      if (!date) return false;
+      const now = new Date();
+      const day = now.getDay(); // 0=Dom, 1=Lun, ..., 6=Sáb
+      const diffToMonday = day === 0 ? 6 : day - 1;
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      return date >= monday && date <= sunday;
+    }
 
     // ── CLASIFICAR CLIENTE ───────────────────────────────────────────────────
     function clasificarCliente(f1, f2) {
@@ -520,12 +634,31 @@
           iFecha1 >= 0 ? r[iFecha1] : '',
           iFecha2 >= 0 ? r[iFecha2] : ''
         );
-        if (!vmap[vendedor]) vmap[vendedor] = { total:0, completo:0, critico:0, progreso:0, sinContactar:0, early_first:0 };
+        if (!vmap[vendedor]) vmap[vendedor] = {
+          total:0, completo:0, critico:0, progreso:0, sinContactar:0, early_first:0,
+          llamadasHoy: 0, efectivasHoy: 0,
+          llamadasSemana: 0, efectivasSemana: 0
+        };
         const vd = vmap[vendedor];
         vd.total++;
         vd[estado === 'sin-contactar' ? 'sinContactar' : estado]++;
         const d1 = parseDate(iFecha1 >= 0 ? r[iFecha1] : '');
         if (d1 && esMismoMes(d1) && d1.getDate() <= 15) vd.early_first++;
+
+        // ── META DIARIA Y SEMANAL ──────────────────────────────────────────
+        // Una llamada cuenta si la fecha del 1er O 2do contacto = HOY
+        const d2 = parseDate(iFecha2 >= 0 ? r[iFecha2] : '');
+        const llamadaHoy    = esHoy(d1) || esHoy(d2);
+        const llamadaSemana = esEstaSemana(d1) || esEstaSemana(d2);
+
+        if (llamadaHoy) {
+          vd.llamadasHoy++;
+          if (sk === 'contactado') vd.efectivasHoy++;
+        }
+        if (llamadaSemana) {
+          vd.llamadasSemana++;
+          if (sk === 'contactado') vd.efectivasSemana++;
+        }
       }
       return { kpi, kpiByV, vmap };
     }
@@ -546,6 +679,15 @@
       const pct1  = Math.round(vd.early_first / (vd.total || 1) * 100);
       const pct2  = Math.round(vd.completo    / (vd.early_first || 1) * 100);
 
+      // Meta diaria
+      const llamadas        = vd.llamadasHoy || 0;
+      const efectivas       = vd.efectivasHoy || 0;
+      const dgPct           = Math.min(100, Math.round(llamadas / DAILY_GOAL * 100));
+      const dgDone          = llamadas >= DAILY_GOAL;
+      // Acumulado semanal
+      const llamadasSemana  = vd.llamadasSemana  || 0;
+      const efectivasSemana = vd.efectivasSemana || 0;
+
       const card = document.createElement('div');
       card.className = 'v-card' + (vd.critico > 0 ? ' has-criticos' : '');
       card.innerHTML = `
@@ -561,6 +703,33 @@
             <div class="sem-sub">${pct2}% ciclos completos del mes</div>
           </div>
         </div>
+
+        <div class="goals-row">
+          <div class="daily-goal ${dgDone ? 'completed' : ''}">
+            <div class="dg-header">
+              <span class="dg-title">&#128205; Meta del d&iacute;a</span>
+              <span class="dg-count ${dgDone ? 'done' : ''}">${llamadas}<span class="target"> / ${DAILY_GOAL}</span></span>
+            </div>
+            <div class="dg-track">
+              <div class="dg-fill" style="width:${dgPct}%"></div>
+            </div>
+            <div class="dg-extra">
+              <span>Efectivas hoy</span>
+              <span class="ok">&#9989; ${efectivas}</span>
+            </div>
+          </div>
+          <div class="week-goal">
+            <div>
+              <div class="wg-title">&#128197; Semana</div>
+              <div class="wg-main">
+                <span class="wg-num">${llamadasSemana}</span>
+                <span class="wg-sub">llamadas</span>
+              </div>
+            </div>
+            <div class="wg-eff">&#9989; ${efectivasSemana} efectivas</div>
+          </div>
+        </div>
+
         ${vd.critico > 0 ? `
         <div class="critico-alert">
           <span class="critico-dot"></span>
