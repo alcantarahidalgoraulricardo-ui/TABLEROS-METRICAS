@@ -25,7 +25,7 @@
       background: var(--bg);
       color: #e8e8e8;
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      font-size: 139%;
+      font-size: 140%;
     }
 
     body {
@@ -134,6 +134,91 @@
     .kpi-breakdown-name { font-size: 0.57rem; font-weight: 700; letter-spacing: 1px; color: #666; }
     .kpi-breakdown-val  { font-size: 0.72rem; font-weight: 800; color: #fff; }
 
+    /* ── BANNER SIN VENDEDOR ─────────────────────────────── */
+    .unassigned-banner {
+      background: linear-gradient(90deg, #1a1410 0%, #14140a 100%);
+      border: 1px solid var(--cafe);
+      border-radius: 12px;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      animation: pulse-cafe 3s ease-in-out infinite;
+    }
+    @keyframes pulse-cafe {
+      0%, 100% { box-shadow: 0 0 0 0 #c2783a33; }
+      50%      { box-shadow: 0 0 16px 2px #c2783a55; }
+    }
+    .ub-icon {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: #c2783a22;
+      border: 1px solid var(--cafe);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+    .ub-info { flex: 1; min-width: 0; }
+    .ub-title {
+      font-size: 0.65rem;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--cafe);
+      font-weight: 800;
+      margin-bottom: 1px;
+    }
+    .ub-sub {
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+    .ub-count {
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .ub-count-lbl {
+      font-size: 0.55rem;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      text-align: right;
+      margin-top: 2px;
+    }
+    .ub-stats {
+      display: flex;
+      gap: 14px;
+      padding-left: 14px;
+      border-left: 1px solid #2a2a2a;
+    }
+    .ub-stat { text-align: center; }
+    .ub-stat-val {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .ub-stat-lbl {
+      font-size: 0.5rem;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    /* Fila SIN VENDEDOR dentro del desglose de KPI */
+    .kpi-breakdown-row.unassigned {
+      background: #1a1410;
+      border: 1px solid #c2783a44;
+    }
+    .kpi-breakdown-row.unassigned .kpi-breakdown-name { color: var(--cafe); }
+
     /* ── VENDOR SCROLL ───────────────────────────────────── */
     .vendor-label {
       font-size: 0.6rem;
@@ -170,7 +255,7 @@
     }
     .vendor-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: 12px;
       padding: 2px 2px 12px;
     }
@@ -442,6 +527,19 @@
     </div>
   </div>
 
+  <div class="unassigned-banner" id="unassignedBanner" style="display:none">
+    <div class="ub-icon">&#128100;</div>
+    <div class="ub-info">
+      <div class="ub-title">Clientes sin vendedor</div>
+      <div class="ub-sub">Disponibles para asignaci&oacute;n por JAH, JPB &oacute; RRH</div>
+    </div>
+    <div>
+      <div class="ub-count" id="ubCount">0</div>
+      <div class="ub-count-lbl">en pool</div>
+    </div>
+    <div class="ub-stats" id="ubStats"></div>
+  </div>
+
   <div class="vendor-label">Sem&aacute;foro de actividad &mdash; por vendedor (mes en curso)</div>
 
   <div class="vendor-wrap" id="vendorWrap">
@@ -453,9 +551,11 @@
     const SHEET_ID      = '1CZhpo2mUtg7nps29nQ13kkxHsZ8jPl9J';
     const GID           = '0';
     const REFRESH_MS    = 60000;
-    const CRITICAL_DAYS = 5;
-    const T_GREEN       = 0.80;
-    const DAILY_GOAL    = 25;    // meta diaria de llamadas por vendedor
+    const CRITICAL_DAYS  = 5;
+    const T_GREEN        = 0.80;
+    const DAILY_GOAL     = 25;    // meta diaria de llamadas por vendedor
+    const ACTIVE_VENDORS = ['JAH', 'JPB', 'RRH'];  // vendedores activos
+    const UNASSIGNED_KEY = 'SIN VENDEDOR';
     const SCROLL_SPEED  = 0.5;    // px por frame (~30 px/seg a 60 fps)
     const PAUSE_MS      = 1800;   // pausa al llegar al inicio/fin del loop
 
@@ -622,8 +722,10 @@
       for (let i = 1; i < rows.length; i++) {
         const r = rows[i];
         if (!r || r.every(c => !c)) continue;
-        const vendedor = norm(r[iVendedor] || '');
-        if (!vendedor) continue;
+        let vendedor = norm(r[iVendedor] || '');
+        // Si el vendedor no está en la lista activa (incluye vacío, FPG, etc.)
+        // se asigna al pool "SIN VENDEDOR"
+        if (!ACTIVE_VENDORS.includes(vendedor)) vendedor = UNASSIGNED_KEY;
 
         const sk = mapStatus(r[iStatus] || '');
         if (sk) kpi[sk]++;
@@ -785,28 +887,73 @@
       document.getElementById('kpi-sin').textContent        = kpi.sin;
       document.getElementById('kpi-nc').textContent         = kpi.nc;
 
-      // Desglose por vendedor
+      // Desglose por vendedor (vendedores activos primero, sin vendedor al final destacado)
       const kpiKeys = ['potencial','futuro','contactado','sin','nc'];
       const kpiIds  = ['kpi-potencial','kpi-futuro','kpi-contactado','kpi-sin','kpi-nc'];
-      const vendedores = Object.keys(kpiByV).sort();
+      const vendedoresActivos = Object.keys(kpiByV)
+        .filter(v => v !== UNASSIGNED_KEY)
+        .sort();
+      const tieneSinVendedor = !!kpiByV[UNASSIGNED_KEY];
+
       kpiKeys.forEach((key, idx) => {
         const card = document.getElementById(kpiIds[idx]).closest('.kpi-card');
         const old  = card.querySelector('.kpi-breakdown');
         if (old) old.remove();
         const bd = document.createElement('div');
         bd.className = 'kpi-breakdown';
-        for (const vname of vendedores) {
+        for (const vname of vendedoresActivos) {
           const count = (kpiByV[vname]?.[key]) || 0;
           const row = document.createElement('div');
           row.className = 'kpi-breakdown-row';
           row.innerHTML = `<span class="kpi-breakdown-name">${vname}</span><span class="kpi-breakdown-val">${count}</span>`;
           bd.appendChild(row);
         }
+        if (tieneSinVendedor) {
+          const count = kpiByV[UNASSIGNED_KEY][key] || 0;
+          const row = document.createElement('div');
+          row.className = 'kpi-breakdown-row unassigned';
+          row.innerHTML = `<span class="kpi-breakdown-name">SIN VEND.</span><span class="kpi-breakdown-val">${count}</span>`;
+          bd.appendChild(row);
+        }
         card.appendChild(bd);
       });
 
-      // Grid de vendedores
-      const names    = Object.keys(vmap).sort();
+      // Banner SIN VENDEDOR
+      const banner    = document.getElementById('unassignedBanner');
+      const ubCount   = document.getElementById('ubCount');
+      const ubStats   = document.getElementById('ubStats');
+      const sinV      = vmap[UNASSIGNED_KEY];
+      if (sinV && sinV.total > 0) {
+        banner.style.display = 'flex';
+        ubCount.textContent  = sinV.total;
+        const kSV = kpiByV[UNASSIGNED_KEY] || {};
+        ubStats.innerHTML = `
+          <div class="ub-stat">
+            <div class="ub-stat-val" style="color:var(--purple)">${kSV.potencial || 0}</div>
+            <div class="ub-stat-lbl">Potencial</div>
+          </div>
+          <div class="ub-stat">
+            <div class="ub-stat-val" style="color:var(--cafe)">${kSV.futuro || 0}</div>
+            <div class="ub-stat-lbl">Futuro</div>
+          </div>
+          <div class="ub-stat">
+            <div class="ub-stat-val" style="color:var(--green)">${kSV.contactado || 0}</div>
+            <div class="ub-stat-lbl">Contactado</div>
+          </div>
+          <div class="ub-stat">
+            <div class="ub-stat-val" style="color:var(--red)">${kSV.sin || 0}</div>
+            <div class="ub-stat-lbl">Sin contactar</div>
+          </div>
+          <div class="ub-stat">
+            <div class="ub-stat-val" style="color:var(--yellow)">${kSV.nc || 0}</div>
+            <div class="ub-stat-lbl">No contest&oacute;</div>
+          </div>`;
+      } else {
+        banner.style.display = 'none';
+      }
+
+      // Grid de vendedores (excluye SIN VENDEDOR - tiene su propio banner)
+      const names    = Object.keys(vmap).filter(v => v !== UNASSIGNED_KEY).sort();
       const now      = new Date();
       const period   = `${MONTHS[now.getMonth()].toUpperCase()} ${now.getFullYear()}`;
       const daysLeft = daysUntilEndOfMonth();
