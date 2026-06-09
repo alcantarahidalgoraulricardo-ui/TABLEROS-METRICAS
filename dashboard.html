@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Parsons CNC — Dashboard de Ventas</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #07091a;
+      --surface:   #0f1326;
+      --border:    rgba(255,255,255,0.07);
+      --muted:     #6b7a99;
+      --text:      #e8eaf0;
+      --cnc1:      #3b82f6;
+      --cnc2:      #06b6d4;
+      --conv1:     #f59e0b;
+      --conv2:     #f97316;
+      --ret1:      #8b5cf6;
+      --ret2:      #ec4899;
+      --green:     #22c55e;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 28px 32px;
+      gap: 28px;
+    }
+
+    /* ── HEADER ─────────────────────────────── */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand h1 {
+      font-size: clamp(20px, 2.2vw, 30px);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #fff 60%, var(--cnc1));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand p {
+      font-size: clamp(11px, 1.1vw, 14px);
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .meta {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    #lastUpdated {
+      font-size: clamp(11px, 1vw, 13px);
+      color: var(--muted);
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(34,197,94,.12);
+      border: 1px solid rgba(34,197,94,.25);
+      color: var(--green);
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: clamp(10px, 0.9vw, 12px);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%,100% { opacity: 1; }
+      50%      { opacity: .25; }
+    }
+
+    /* ── SECTION LABEL ──────────────────────── */
+    .section-label {
+      font-size: clamp(9px, 0.85vw, 11px);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: -10px;
+    }
+
+    /* ── CATEGORY CARDS ─────────────────────── */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .cat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: clamp(18px, 2vw, 28px);
+      position: relative;
+      overflow: hidden;
+      transition: transform .2s;
+    }
+
+    .cat-card:hover { transform: translateY(-2px); }
+
+    .stripe {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      border-radius: 18px 18px 0 0;
+    }
+
+    .cnc  .stripe { background: linear-gradient(90deg, var(--cnc1),  var(--cnc2)); }
+    .conv .stripe { background: linear-gradient(90deg, var(--conv1), var(--conv2)); }
+    .ret  .stripe { background: linear-gradient(90deg, var(--ret1),  var(--ret2)); }
+
+    .cnc  .bar-fill { background: linear-gradient(90deg, var(--cnc1),  var(--cnc2)); }
+    .conv .bar-fill { background: linear-gradient(90deg, var(--conv1), var(--conv2)); }
+    .ret  .bar-fill { background: linear-gradient(90deg, var(--ret1),  var(--ret2)); }
+
+    .cat-name {
+      font-size: clamp(10px, 1vw, 13px);
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--muted);
+      margin: 4px 0 18px;
+    }
+
+    .nums {
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .num-block { text-align: center; }
+
+    .num-big {
+      font-size: clamp(40px, 5vw, 64px);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -2px;
+    }
+
+    .num-real  .num-big { color: #fff; }
+    .num-obj   .num-big { color: #2d3557; }
+
+    .num-label {
+      font-size: clamp(9px, 0.85vw, 11px);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .slash {
+      font-size: clamp(24px, 2.5vw, 36px);
+      color: #1e2540;
+      padding-bottom: 10px;
+      flex-shrink: 0;
+    }
+
+    .bar-track {
+      background: rgba(255,255,255,.06);
+      border-radius: 99px;
+      height: 8px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 1.2s cubic-bezier(.4,0,.2,1);
+    }
+
+    .bar-footer {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+
+    .bar-pct {
+      font-size: clamp(11px, 1vw, 13px);
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .bar-gap {
+      font-size: clamp(11px, 1vw, 13px);
+      color: var(--muted);
+    }
+
+    /* ── SALESPERSON CARDS ──────────────────── */
+    .sales-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: clamp(18px, 2vw, 28px);
+    }
+
+    .sales-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    .avatar {
+      width: clamp(36px, 3.5vw, 46px);
+      height: clamp(36px, 3.5vw, 46px);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(14px, 1.5vw, 18px);
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .av-0 { background: linear-gradient(135deg, var(--cnc1), #1d4ed8); }
+    .av-1 { background: linear-gradient(135deg, var(--conv1), #b45309); }
+    .av-2 { background: linear-gradient(135deg, var(--ret1),  #6d28d9); }
+
+    .sales-name {
+      font-size: clamp(15px, 1.6vw, 20px);
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .breakdown {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .brk {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.05);
+      border-radius: 12px;
+      padding: clamp(12px, 1.5vw, 18px) 8px;
+      text-align: center;
+    }
+
+    .brk-val {
+      font-size: clamp(30px, 4vw, 50px);
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+
+    .brk-label {
+      font-size: clamp(9px, 0.8vw, 11px);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    .sales-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .sf-label { font-size: clamp(11px, 1vw, 13px); color: var(--muted); }
+
+    .sf-total {
+      font-size: clamp(16px, 1.8vw, 22px);
+      font-weight: 800;
+      color: #fff;
+    }
+
+    /* ── ERROR ──────────────────────────────── */
+    #status-msg { display: none; text-align: center; padding: 40px; }
+
+    .error-box {
+      background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.3);
+      color: #f87171;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    /* ── RESPONSIVE ─────────────────────────── */
+    @media (min-width: 1400px) { body { padding: 36px 48px; } }
+    @media (max-width: 900px)  { .grid-3 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>PARSONS CNC — Dashboard de Ventas</h1>
+    <p>Resultados en tiempo real por categoría y vendedor</p>
+  </div>
+  <div class="meta">
+    <span id="lastUpdated">Cargando…</span>
+    <span class="live-badge"><span class="dot"></span>En vivo · actualiza cada 60 s</span>
+  </div>
+</header>
+
+<span class="section-label">Resultados por Categoría</span>
+<div class="grid-3" id="cat-grid"></div>
+
+<span class="section-label">Pendientes por Cerrar — por Vendedor</span>
+<div class="grid-3" id="sales-grid"></div>
+
+<div id="status-msg"></div>
+
+<script>
+const CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/' +
+  '2PACX-1vQ9v-GKydOTho40zOj_CFQHTOfQAW1YbHzYV9qKjqniTy6lVefOlK9fJUd77cfgkMYXvcsMLEI35ela' +
+  '/pub?gid=0&single=true&output=csv';
+
+const REFRESH_MS = 60_000;
+
+/* ── helpers ──────────────────────────── */
+const num = v => parseInt((String(v || '0')).replace(/[^0-9]/g, ''), 10) || 0;
+const pct = (r, o) => o > 0 ? Math.min(100, Math.round(r / o * 100)) : 0;
+
+function findRow(rows, ...keywords) {
+  return rows.findIndex(r => {
+    const s = r.join(' ').toUpperCase();
+    return keywords.every(k => s.includes(k.toUpperCase()));
+  });
+}
+
+/* ── parse CSV ────────────────────────── */
+function parse(rows) {
+  const objIdx  = rows.findIndex(r => r.filter(c => /OBJETIVO/i.test(c)).length >= 2);
+  const realIdx = rows.findIndex(r => r.filter(c => /^REAL\s*$/i.test(c)).length >= 2);
+  const nameIdx = findRow(rows, 'RICARDO', 'JOSHUA');
+  const subIdx  = findRow(rows, 'RECOMPRA', 'PYR');
+
+  const obj   = rows[objIdx]       || [];
+  const real  = rows[realIdx]      || [];
+  const names = rows[nameIdx]      || [];
+  const data  = rows[subIdx + 1]   || [];
+
+  return {
+    categories: [
+      { name: 'Equipos CNC',            cls: 'cnc',  objetivo: num(obj[2]),  real: num(real[2])  },
+      { name: 'Equipos Convencionales', cls: 'conv', objetivo: num(obj[5]),  real: num(real[5])  },
+      { name: 'Retrofit',               cls: 'ret',  objetivo: num(obj[8]),  real: num(real[8])  },
+    ],
+    salespeople: [
+      { name: names[0], av: 0, nuevo: num(data[0]), recompra: num(data[1]), pyr: num(data[2])  },
+      { name: names[4], av: 1, nuevo: num(data[4]), recompra: num(data[5]), pyr: num(data[6])  },
+      { name: names[8], av: 2, nuevo: num(data[8]), recompra: num(data[9]), pyr: num(data[10]) },
+    ]
+  };
+}
+
+/* ── render ───────────────────────────── */
+function renderCategories(cats) {
+  document.getElementById('cat-grid').innerHTML = cats.map(c => {
+    // REAL es ascendente: valor ya vendido
+    const p   = pct(c.real, c.objetivo);
+    const gap = Math.max(0, c.objetivo - c.real);
+    return `
+    <div class="cat-card ${c.cls}">
+      <div class="stripe"></div>
+      <div class="cat-name">${c.name}</div>
+      <div class="nums">
+        <div class="num-block num-real">
+          <div class="num-big">${c.real}</div>
+          <div class="num-label">Real</div>
+        </div>
+        <div class="slash">/</div>
+        <div class="num-block num-obj">
+          <div class="num-big">${c.objetivo}</div>
+          <div class="num-label">Objetivo</div>
+        </div>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${p}%"></div>
+      </div>
+      <div class="bar-footer">
+        <span class="bar-pct">${p}%</span>
+        <span class="bar-gap">${gap > 0 ? `Faltan ${gap}` : '¡Objetivo alcanzado!'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderSales(people) {
+  document.getElementById('sales-grid').innerHTML = people.map(s => {
+    const name  = (s.name || '').trim();
+    // Números son cuenta regresiva: pendientes por cerrar
+    const total = s.nuevo + s.recompra + s.pyr;
+    return `
+    <div class="sales-card">
+      <div class="sales-header">
+        <div class="avatar av-${s.av}">${name.charAt(0).toUpperCase()}</div>
+        <div class="sales-name">${name}</div>
+      </div>
+      <div class="breakdown">
+        <div class="brk">
+          <div class="brk-val">${s.nuevo}</div>
+          <div class="brk-label">Cliente<br>Nuevo</div>
+        </div>
+        <div class="brk">
+          <div class="brk-val">${s.recompra}</div>
+          <div class="brk-label">Recompra</div>
+        </div>
+        <div class="brk">
+          <div class="brk-val">${s.pyr}</div>
+          <div class="brk-label">PYR</div>
+        </div>
+      </div>
+      <div class="sales-footer">
+        <span class="sf-label">Total pendiente por cerrar</span>
+        <span class="sf-total">${total}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateTimestamp() {
+  document.getElementById('lastUpdated').textContent =
+    'Actualizado: ' + new Date().toLocaleString('es-MX', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+}
+
+/* ── fetch sin caché ──────────────────── */
+function load() {
+  fetch(CSV_URL + '&t=' + Date.now(), { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(csvText => {
+      const clean = csvText.replace(/\r/g, '');
+      const { data } = Papa.parse(clean, { skipEmptyLines: false });
+      const { categories, salespeople } = parse(data);
+      renderCategories(categories);
+      renderSales(salespeople);
+      updateTimestamp();
+      document.getElementById('status-msg').style.display = 'none';
+    })
+    .catch(e => {
+      const el = document.getElementById('status-msg');
+      el.style.display = 'block';
+      el.innerHTML = `<div class="error-box">No se pudo cargar el Google Sheet: ${e.message}</div>`;
+    });
+}
+
+load();
+setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
