@@ -36,8 +36,11 @@
     .layout {
       display: flex;
       flex-direction: column;
-      height: 100vh;
+      /* zoom: 1.4 agranda 40% — se compensan ancho y alto para llenar exactamente el viewport */
       zoom: 1.4;
+      width: calc(100vw / 1.4);
+      height: calc(100vh / 1.4);
+      overflow: hidden;
     }
 
     /* ─── HEADER ─── */
