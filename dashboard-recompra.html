@@ -134,90 +134,70 @@
     .kpi-breakdown-name { font-size: 0.57rem; font-weight: 700; letter-spacing: 1px; color: #666; }
     .kpi-breakdown-val  { font-size: 0.72rem; font-weight: 800; color: #fff; }
 
-    /* ── BANNER SIN VENDEDOR ─────────────────────────────── */
-    .unassigned-banner {
-      background: linear-gradient(90deg, #1a1410 0%, #14140a 100%);
-      border: 1px solid var(--cafe);
-      border-radius: 12px;
-      padding: 10px 18px;
+    /* ── PILL SIN VENDEDOR (en header) ───────────────────── */
+    .unassigned-pill {
       display: flex;
       align-items: center;
-      gap: 14px;
-      flex-shrink: 0;
+      gap: 12px;
+      background: linear-gradient(90deg, #1a1410, #14140a);
+      border: 1px solid var(--cafe);
+      border-radius: 12px;
+      padding: 6px 14px 6px 8px;
       animation: pulse-cafe 3s ease-in-out infinite;
+      max-width: 60%;
     }
     @keyframes pulse-cafe {
       0%, 100% { box-shadow: 0 0 0 0 #c2783a33; }
-      50%      { box-shadow: 0 0 16px 2px #c2783a55; }
+      50%      { box-shadow: 0 0 14px 2px #c2783a55; }
     }
-    .ub-icon {
-      width: 36px; height: 36px;
+    .up-icon {
+      width: 28px; height: 28px;
       border-radius: 50%;
       background: #c2783a22;
       border: 1px solid var(--cafe);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.2rem;
+      font-size: 0.95rem;
       flex-shrink: 0;
     }
-    .ub-info { flex: 1; min-width: 0; }
-    .ub-title {
-      font-size: 0.65rem;
-      letter-spacing: 2.5px;
+    .up-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .up-title {
+      font-size: 0.55rem;
+      letter-spacing: 2px;
       text-transform: uppercase;
       color: var(--cafe);
       font-weight: 800;
-      margin-bottom: 1px;
+      line-height: 1;
     }
-    .ub-sub {
-      font-size: 0.62rem;
+    .up-stats {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+    .up-stat {
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+      font-size: 0.6rem;
       color: var(--muted);
-      letter-spacing: 1px;
     }
-    .ub-count {
-      font-size: 1.8rem;
+    .up-stat strong {
+      font-size: 0.75rem;
+      color: #fff;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    .up-count {
+      font-size: 1.6rem;
       font-weight: 900;
       color: #fff;
       font-variant-numeric: tabular-nums;
       line-height: 1;
-    }
-    .ub-count-lbl {
-      font-size: 0.55rem;
-      letter-spacing: 1.5px;
-      color: var(--muted);
-      text-transform: uppercase;
-      text-align: right;
-      margin-top: 2px;
-    }
-    .ub-stats {
-      display: flex;
-      gap: 14px;
-      padding-left: 14px;
+      padding-left: 10px;
       border-left: 1px solid #2a2a2a;
     }
-    .ub-stat { text-align: center; }
-    .ub-stat-val {
-      font-size: 0.95rem;
-      font-weight: 800;
-      color: #fff;
-      font-variant-numeric: tabular-nums;
-      line-height: 1;
-    }
-    .ub-stat-lbl {
-      font-size: 0.5rem;
-      color: var(--muted);
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-top: 3px;
-    }
-
-    /* Fila SIN VENDEDOR dentro del desglose de KPI */
-    .kpi-breakdown-row.unassigned {
-      background: #1a1410;
-      border: 1px solid #c2783a44;
-    }
-    .kpi-breakdown-row.unassigned .kpi-breakdown-name { color: var(--cafe); }
 
     /* ── VENDOR SCROLL ───────────────────────────────────── */
     .vendor-label {
@@ -264,11 +244,11 @@
     .v-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px 22px;
+      border-radius: 14px;
+      padding: 14px 16px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
       position: relative;
       overflow: hidden;
     }
@@ -290,7 +270,7 @@
       pointer-events: none;
     }
     .v-name {
-      font-size: clamp(1.9rem, 3.2vw, 3rem);
+      font-size: clamp(1.5rem, 2.5vw, 2.3rem);
       font-weight: 900;
       letter-spacing: 4px;
       color: #fff;
@@ -307,7 +287,7 @@
     /* SEMAPHORE */
     .semaphore { display: flex; align-items: center; gap: 14px; }
     .sem-light {
-      width: 46px; height: 46px;
+      width: 38px; height: 38px;
       border-radius: 50%;
       flex-shrink: 0;
     }
@@ -366,10 +346,10 @@
       background: #0d0d0d;
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 10px 12px;
+      padding: 7px 10px;
       display: flex;
       flex-direction: column;
-      gap: 7px;
+      gap: 5px;
     }
     .week-goal { gap: 4px; justify-content: space-between; }
     .week-goal .wg-title {
@@ -459,7 +439,7 @@
       background: #0d0d0d;
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 6px 4px;
+      padding: 4px 4px;
       text-align: center;
     }
     .stat-box.full { grid-column: span 2; }
@@ -491,6 +471,16 @@
       <h1>PARSONS CNC</h1>
       <p>Dashboard Recompra &mdash; Seguimiento Mensual</p>
     </div>
+
+    <div class="unassigned-pill" id="unassignedPill" style="display:none">
+      <div class="up-icon">&#128100;</div>
+      <div class="up-main">
+        <div class="up-title">Clientes sin vendedor</div>
+        <div class="up-stats" id="upStats"></div>
+      </div>
+      <div class="up-count" id="upCount">0</div>
+    </div>
+
     <div class="header-right">
       <div class="live-badge"><span class="live-dot"></span>En vivo &middot; actualiza cada 60 seg</div>
       <div id="clock">Cargando&hellip;</div>
@@ -525,19 +515,6 @@
       <div class="label">No Contest&oacute;</div>
       <div class="value" id="kpi-nc">&mdash;</div>
     </div>
-  </div>
-
-  <div class="unassigned-banner" id="unassignedBanner" style="display:none">
-    <div class="ub-icon">&#128100;</div>
-    <div class="ub-info">
-      <div class="ub-title">Clientes sin vendedor</div>
-      <div class="ub-sub">Disponibles para asignaci&oacute;n por JAH, JPB &oacute; RRH</div>
-    </div>
-    <div>
-      <div class="ub-count" id="ubCount">0</div>
-      <div class="ub-count-lbl">en pool</div>
-    </div>
-    <div class="ub-stats" id="ubStats"></div>
   </div>
 
   <div class="vendor-label">Sem&aacute;foro de actividad &mdash; por vendedor (mes en curso)</div>
@@ -908,48 +885,26 @@
           row.innerHTML = `<span class="kpi-breakdown-name">${vname}</span><span class="kpi-breakdown-val">${count}</span>`;
           bd.appendChild(row);
         }
-        if (tieneSinVendedor) {
-          const count = kpiByV[UNASSIGNED_KEY][key] || 0;
-          const row = document.createElement('div');
-          row.className = 'kpi-breakdown-row unassigned';
-          row.innerHTML = `<span class="kpi-breakdown-name">SIN VEND.</span><span class="kpi-breakdown-val">${count}</span>`;
-          bd.appendChild(row);
-        }
         card.appendChild(bd);
       });
 
-      // Banner SIN VENDEDOR
-      const banner    = document.getElementById('unassignedBanner');
-      const ubCount   = document.getElementById('ubCount');
-      const ubStats   = document.getElementById('ubStats');
-      const sinV      = vmap[UNASSIGNED_KEY];
+      // Pill SIN VENDEDOR en header
+      const pill    = document.getElementById('unassignedPill');
+      const upCount = document.getElementById('upCount');
+      const upStats = document.getElementById('upStats');
+      const sinV    = vmap[UNASSIGNED_KEY];
       if (sinV && sinV.total > 0) {
-        banner.style.display = 'flex';
-        ubCount.textContent  = sinV.total;
+        pill.style.display  = 'flex';
+        upCount.textContent = sinV.total;
         const kSV = kpiByV[UNASSIGNED_KEY] || {};
-        ubStats.innerHTML = `
-          <div class="ub-stat">
-            <div class="ub-stat-val" style="color:var(--purple)">${kSV.potencial || 0}</div>
-            <div class="ub-stat-lbl">Potencial</div>
-          </div>
-          <div class="ub-stat">
-            <div class="ub-stat-val" style="color:var(--cafe)">${kSV.futuro || 0}</div>
-            <div class="ub-stat-lbl">Futuro</div>
-          </div>
-          <div class="ub-stat">
-            <div class="ub-stat-val" style="color:var(--green)">${kSV.contactado || 0}</div>
-            <div class="ub-stat-lbl">Contactado</div>
-          </div>
-          <div class="ub-stat">
-            <div class="ub-stat-val" style="color:var(--red)">${kSV.sin || 0}</div>
-            <div class="ub-stat-lbl">Sin contactar</div>
-          </div>
-          <div class="ub-stat">
-            <div class="ub-stat-val" style="color:var(--yellow)">${kSV.nc || 0}</div>
-            <div class="ub-stat-lbl">No contest&oacute;</div>
-          </div>`;
+        upStats.innerHTML = `
+          <span class="up-stat" style="color:var(--purple)">POT <strong>${kSV.potencial || 0}</strong></span>
+          <span class="up-stat" style="color:var(--cafe)">FUT <strong>${kSV.futuro || 0}</strong></span>
+          <span class="up-stat" style="color:var(--green)">CONT <strong>${kSV.contactado || 0}</strong></span>
+          <span class="up-stat" style="color:var(--red)">SIN <strong>${kSV.sin || 0}</strong></span>
+          <span class="up-stat" style="color:var(--yellow)">NC <strong>${kSV.nc || 0}</strong></span>`;
       } else {
-        banner.style.display = 'none';
+        pill.style.display = 'none';
       }
 
       // Grid de vendedores (excluye SIN VENDEDOR - tiene su propio banner)
