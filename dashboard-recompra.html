@@ -58,7 +58,12 @@
       text-transform: uppercase;
       margin-top: 2px;
     }
-    .header-right { text-align: right; }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .clock-block { text-align: right; }
     .live-badge {
       display: inline-flex;
       align-items: center;
@@ -134,63 +139,31 @@
     .kpi-breakdown-name { font-size: 0.57rem; font-weight: 700; letter-spacing: 1px; color: #666; }
     .kpi-breakdown-val  { font-size: 0.72rem; font-weight: 800; color: #fff; }
 
-    /* ── PILL SIN VENDEDOR (en header) ───────────────────── */
+    /* ── PILL SIN VENDEDOR (en header, junto al reloj) ───── */
     .unassigned-pill {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       background: linear-gradient(90deg, #1a1410, #14140a);
       border: 1px solid var(--cafe);
-      border-radius: 12px;
-      padding: 6px 14px 6px 8px;
+      border-radius: 10px;
+      padding: 8px 14px;
       animation: pulse-cafe 3s ease-in-out infinite;
-      max-width: 60%;
     }
     @keyframes pulse-cafe {
       0%, 100% { box-shadow: 0 0 0 0 #c2783a33; }
       50%      { box-shadow: 0 0 14px 2px #c2783a55; }
     }
-    .up-icon {
-      width: 28px; height: 28px;
-      border-radius: 50%;
-      background: #c2783a22;
-      border: 1px solid var(--cafe);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.95rem;
-      flex-shrink: 0;
-    }
-    .up-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
     .up-title {
-      font-size: 0.55rem;
+      font-size: 0.6rem;
       letter-spacing: 2px;
       text-transform: uppercase;
       color: var(--cafe);
       font-weight: 800;
-      line-height: 1;
-    }
-    .up-stats {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: nowrap;
-    }
-    .up-stat {
-      display: flex;
-      align-items: baseline;
-      gap: 3px;
-      font-size: 0.6rem;
-      color: var(--muted);
-    }
-    .up-stat strong {
-      font-size: 0.75rem;
-      color: #fff;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
     .up-count {
-      font-size: 1.6rem;
+      font-size: 1.4rem;
       font-weight: 900;
       color: #fff;
       font-variant-numeric: tabular-nums;
@@ -472,18 +445,15 @@
       <p>Dashboard Recompra &mdash; Seguimiento Mensual</p>
     </div>
 
-    <div class="unassigned-pill" id="unassignedPill" style="display:none">
-      <div class="up-icon">&#128100;</div>
-      <div class="up-main">
-        <div class="up-title">Clientes sin vendedor</div>
-        <div class="up-stats" id="upStats"></div>
-      </div>
-      <div class="up-count" id="upCount">0</div>
-    </div>
-
     <div class="header-right">
-      <div class="live-badge"><span class="live-dot"></span>En vivo &middot; actualiza cada 60 seg</div>
-      <div id="clock">Cargando&hellip;</div>
+      <div class="unassigned-pill" id="unassignedPill" style="display:none">
+        <span class="up-title">Clientes sin vendedor</span>
+        <span class="up-count" id="upCount">0</span>
+      </div>
+      <div class="clock-block">
+        <div class="live-badge"><span class="live-dot"></span>En vivo &middot; actualiza cada 60 seg</div>
+        <div id="clock">Cargando&hellip;</div>
+      </div>
     </div>
   </header>
 
@@ -891,18 +861,10 @@
       // Pill SIN VENDEDOR en header
       const pill    = document.getElementById('unassignedPill');
       const upCount = document.getElementById('upCount');
-      const upStats = document.getElementById('upStats');
       const sinV    = vmap[UNASSIGNED_KEY];
       if (sinV && sinV.total > 0) {
         pill.style.display  = 'flex';
         upCount.textContent = sinV.total;
-        const kSV = kpiByV[UNASSIGNED_KEY] || {};
-        upStats.innerHTML = `
-          <span class="up-stat" style="color:var(--purple)">POT <strong>${kSV.potencial || 0}</strong></span>
-          <span class="up-stat" style="color:var(--cafe)">FUT <strong>${kSV.futuro || 0}</strong></span>
-          <span class="up-stat" style="color:var(--green)">CONT <strong>${kSV.contactado || 0}</strong></span>
-          <span class="up-stat" style="color:var(--red)">SIN <strong>${kSV.sin || 0}</strong></span>
-          <span class="up-stat" style="color:var(--yellow)">NC <strong>${kSV.nc || 0}</strong></span>`;
       } else {
         pill.style.display = 'none';
       }
