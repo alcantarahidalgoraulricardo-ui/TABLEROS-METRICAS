@@ -700,13 +700,15 @@
         const llamadaHoy    = esHoy(d1) || esHoy(d2);
         const llamadaSemana = esEstaSemana(d1) || esEstaSemana(d2);
 
+        // Llamada efectiva: status "contactado", "potencial" o "proyecto a futuro"
+        const esEfectiva = (sk === 'contactado' || sk === 'potencial' || sk === 'futuro');
         if (llamadaHoy) {
           vd.llamadasHoy++;
-          if (sk === 'contactado') vd.efectivasHoy++;
+          if (esEfectiva) vd.efectivasHoy++;
         }
         if (llamadaSemana) {
           vd.llamadasSemana++;
-          if (sk === 'contactado') vd.efectivasSemana++;
+          if (esEfectiva) vd.efectivasSemana++;
         }
       }
       return { kpi, kpiByV, vmap };
