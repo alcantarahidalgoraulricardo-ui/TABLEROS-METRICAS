@@ -248,6 +248,16 @@
       text-overflow: ellipsis;
     }
 
+    .client-fc {
+      font-size: 10px;
+      color: var(--accent);
+      margin-top: 2px;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .row-tag {
       font-size: 10px;
       font-weight: 800;
@@ -427,7 +437,7 @@
     const data   = rows.slice(headerIndex + 1);
     const vendors = [];
 
-    for (let col = 0; col < header.length; col += 3) {
+    for (let col = 0; col < header.length; col += 4) {
       const name = (header[col] || '').trim();
       if (!name || name === '.' || name === '-') continue;
 
@@ -436,8 +446,9 @@
         const client  = (row[col]     || '').trim();
         const product = (row[col + 1] || '').trim();
         const rating  = parseInt((row[col + 2] || '').trim(), 10);
+        const fc      = (row[col + 3] || '').trim();
         if (client && (rating === 1 || rating === 2)) {
-          vendor.clients.push({ client, product, rating });
+          vendor.clients.push({ client, product, rating, fc });
         }
       });
       vendors.push(vendor);
@@ -482,6 +493,7 @@
               <div class="client-info">
                 <div class="client-name">${esc(c.client)}</div>
                 ${c.product ? `<div class="client-product">${esc(c.product)}</div>` : ''}
+                ${c.fc ? `<div class="client-fc">&#128197; Cierre: ${esc(c.fc)}</div>` : ''}
               </div>
               <span class="row-tag ${c.rating === 1 ? 'tag-hot' : 'tag-warm'}">${c.rating === 1 ? 'CALIENTE' : 'TIBIA'}</span>
             </div>`).join('')
