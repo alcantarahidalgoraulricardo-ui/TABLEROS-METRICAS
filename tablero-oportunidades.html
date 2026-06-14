@@ -96,8 +96,89 @@
       border-bottom: 1px solid var(--border);
       padding: 12px 32px;
       display: flex;
-      justify-content: center;
-      gap: 72px;
+      justify-content: space-between;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .summary-stats {
+      display: flex;
+      gap: 48px;
+      flex-shrink: 0;
+    }
+
+    .summary-divider {
+      width: 1px;
+      align-self: stretch;
+      background: var(--border-hi);
+      flex-shrink: 0;
+    }
+
+    .summary-forecast {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .forecast-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2.5px;
+      color: var(--text-2);
+    }
+
+    .month-chips {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+
+    .month-chip {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 14px;
+      text-align: center;
+      min-width: 70px;
+    }
+
+    .month-chip-dim { opacity: .55; }
+
+    .month-chip-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-2);
+      margin-bottom: 1px;
+      white-space: nowrap;
+    }
+
+    .month-chip-total {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--text-1);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .month-chip-split {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin-top: 1px;
+    }
+
+    .month-chip-split .mh { color: var(--hot); }
+    .month-chip-split .mw { color: var(--warm); }
+    .month-chip-split .sep { color: var(--text-dim); margin: 0 3px; }
+
+    .month-empty {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
     }
 
     .stat {
@@ -352,25 +433,36 @@
 
   <!-- SUMMARY -->
   <div class="summary">
-    <div class="stat">
-      <div class="stat-dot sd-hot"></div>
-      <div>
-        <div class="stat-label">Calientes</div>
-        <div class="stat-val sv-hot" id="totalHot">—</div>
+    <div class="summary-stats">
+      <div class="stat">
+        <div class="stat-dot sd-hot"></div>
+        <div>
+          <div class="stat-label">Calientes</div>
+          <div class="stat-val sv-hot" id="totalHot">—</div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-dot sd-warm"></div>
+        <div>
+          <div class="stat-label">Tibias</div>
+          <div class="stat-val sv-warm" id="totalWarm">—</div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-dot sd-total"></div>
+        <div>
+          <div class="stat-label">Total</div>
+          <div class="stat-val sv-total" id="totalAll">—</div>
+        </div>
       </div>
     </div>
-    <div class="stat">
-      <div class="stat-dot sd-warm"></div>
-      <div>
-        <div class="stat-label">Tibias</div>
-        <div class="stat-val sv-warm" id="totalWarm">—</div>
-      </div>
-    </div>
-    <div class="stat">
-      <div class="stat-dot sd-total"></div>
-      <div>
-        <div class="stat-label">Total</div>
-        <div class="stat-val sv-total" id="totalAll">—</div>
+
+    <div class="summary-divider"></div>
+
+    <div class="summary-forecast">
+      <div class="forecast-title">Pronóstico de cierre por mes</div>
+      <div class="month-chips" id="monthForecast">
+        <div class="month-empty">Cargando&hellip;</div>
       </div>
     </div>
   </div>
@@ -461,6 +553,50 @@
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  /* ── Normalizar el mes de cierre (F.C.) a un nombre canónico ── */
+  const MONTH_ORDER = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO',
+                       'AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+  function monthKey(raw) {
+    const s = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+    if (!s) return null;
+    let idx = MONTH_ORDER.indexOf(s);
+    if (idx === -1) idx = MONTH_ORDER.findIndex(m => m.startsWith(s.slice(0, 3)));
+    return idx === -1 ? { label: s, order: 99 } : { label: MONTH_ORDER[idx], order: idx };
+  }
+
+  /* ── Agrupar oportunidades por mes de cierre ── */
+  function buildForecast(vendors) {
+    const map = new Map();
+    const sinFecha = { hot: 0, warm: 0 };
+    vendors.forEach(v => v.clients.forEach(c => {
+      const mk = c.fc ? monthKey(c.fc) : null;
+      if (!mk) { c.rating === 1 ? sinFecha.hot++ : sinFecha.warm++; return; }
+      if (!map.has(mk.label)) map.set(mk.label, { label: mk.label, order: mk.order, hot: 0, warm: 0 });
+      const e = map.get(mk.label);
+      c.rating === 1 ? e.hot++ : e.warm++;
+    }));
+    const months = [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+    return { months, sinFecha };
+  }
+
+  function chipHTML(label, hot, warm, dim) {
+    return `
+      <div class="month-chip${dim ? ' month-chip-dim' : ''}">
+        <div class="month-chip-label">${esc(label)}</div>
+        <div class="month-chip-total">${hot + warm}</div>
+        <div class="month-chip-split"><span class="mh">${hot}</span><span class="sep">·</span><span class="mw">${warm}</span></div>
+      </div>`;
+  }
+
+  function renderForecast(vendors) {
+    const { months, sinFecha } = buildForecast(vendors);
+    const chips = months.map(m => chipHTML(m.label, m.hot, m.warm));
+    if (sinFecha.hot + sinFecha.warm > 0) chips.push(chipHTML('Sin fecha', sinFecha.hot, sinFecha.warm, true));
+    document.getElementById('monthForecast').innerHTML =
+      chips.length ? chips.join('') : '<div class="month-empty">Sin fechas de cierre registradas</div>';
+  }
+
   /* ── Renderizar tarjetas ── */
   function render(vendors) {
     let hot = 0, warm = 0;
@@ -469,6 +605,8 @@
     document.getElementById('totalHot').textContent  = hot;
     document.getElementById('totalWarm').textContent = warm;
     document.getElementById('totalAll').textContent  = hot + warm;
+
+    renderForecast(vendors);
 
     const grid = document.getElementById('grid');
     if (!vendors.length) {
