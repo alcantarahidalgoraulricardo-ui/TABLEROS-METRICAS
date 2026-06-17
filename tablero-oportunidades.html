@@ -143,7 +143,7 @@
 
     .month-chips {
       display: flex;
-      gap: 12px;
+      gap: 28px;
       flex-wrap: wrap;
       align-items: stretch;
     }
@@ -152,9 +152,9 @@
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 5px 14px;
+      padding: 5px 16px;
       text-align: center;
-      min-width: 70px;
+      min-width: 88px;
     }
 
     .month-chip-dim { opacity: .55; }
@@ -384,10 +384,14 @@
       font-size: 11px;
       font-weight: 800;
       color: var(--green);
-      margin-top: 2px;
+      margin-top: 3px;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
+
+    .month-chip-money .mh { color: var(--hot); }
+    .month-chip-money .mw { color: var(--warm); }
+    .month-chip-money .sep { color: var(--text-dim); margin: 0 3px; }
 
     .card-empty {
       padding: 28px 18px;
@@ -597,7 +601,9 @@
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  /* ── Convertir el texto de monto a número (acepta $, comas, y sufijos k/m) ── */
+  /* ── Convertir el texto de monto a número en pesos (regla unificada) ──
+     k = miles, m = millones, número solo = pesos exactos. Ignora $, comas y espacios.
+     Ej.: "30k" → 30,000 · "87530" → 87,530 · "1.2m" → 1,200,000 ── */
   function parseMonto(raw) {
     const s = String(raw).trim().toLowerCase().replace(/[$,\s]/g, '');
     if (!s) return 0;
@@ -630,40 +636,40 @@
     return idx === -1 ? { label: s, order: 99 } : { label: MONTH_ORDER[idx], order: idx };
   }
 
-  /* ── Agrupar oportunidades por mes de cierre ── */
+  /* ── Agrupar oportunidades por mes de cierre (monto separado por caliente/tibia) ── */
   function buildForecast(vendors) {
     const map = new Map();
-    const sinFecha = { hot: 0, warm: 0, monto: 0 };
+    const sinFecha = { hot: 0, warm: 0, hotMonto: 0, warmMonto: 0 };
     vendors.forEach(v => v.clients.forEach(c => {
       const mk = c.fc ? monthKey(c.fc) : null;
+      let bucket;
       if (!mk) {
-        c.rating === 1 ? sinFecha.hot++ : sinFecha.warm++;
-        sinFecha.monto += c.monto || 0;
-        return;
+        bucket = sinFecha;
+      } else {
+        if (!map.has(mk.label)) map.set(mk.label, { label: mk.label, order: mk.order, hot: 0, warm: 0, hotMonto: 0, warmMonto: 0 });
+        bucket = map.get(mk.label);
       }
-      if (!map.has(mk.label)) map.set(mk.label, { label: mk.label, order: mk.order, hot: 0, warm: 0, monto: 0 });
-      const e = map.get(mk.label);
-      c.rating === 1 ? e.hot++ : e.warm++;
-      e.monto += c.monto || 0;
+      if (c.rating === 1) { bucket.hot++;  bucket.hotMonto  += c.monto || 0; }
+      else                { bucket.warm++; bucket.warmMonto += c.monto || 0; }
     }));
     const months = [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
     return { months, sinFecha };
   }
 
-  function chipHTML(label, hot, warm, monto, dim) {
+  function chipHTML(label, hot, warm, hotMonto, warmMonto, dim) {
     return `
       <div class="month-chip${dim ? ' month-chip-dim' : ''}">
         <div class="month-chip-label">${esc(label)}</div>
         <div class="month-chip-total">${hot + warm}</div>
         <div class="month-chip-split"><span class="mh">${hot}</span><span class="sep">·</span><span class="mw">${warm}</span></div>
-        <div class="month-chip-money">${fmtMoney(monto)}</div>
+        <div class="month-chip-money"><span class="mh">${fmtMoney(hotMonto)}</span><span class="sep">·</span><span class="mw">${fmtMoney(warmMonto)}</span></div>
       </div>`;
   }
 
   function renderForecast(vendors) {
     const { months, sinFecha } = buildForecast(vendors);
-    const chips = months.map(m => chipHTML(m.label, m.hot, m.warm, m.monto));
-    if (sinFecha.hot + sinFecha.warm > 0) chips.push(chipHTML('Sin fecha', sinFecha.hot, sinFecha.warm, sinFecha.monto, true));
+    const chips = months.map(m => chipHTML(m.label, m.hot, m.warm, m.hotMonto, m.warmMonto));
+    if (sinFecha.hot + sinFecha.warm > 0) chips.push(chipHTML('Sin fecha', sinFecha.hot, sinFecha.warm, sinFecha.hotMonto, sinFecha.warmMonto, true));
     document.getElementById('monthForecast').innerHTML =
       chips.length ? chips.join('') : '<div class="month-empty">Sin fechas de cierre registradas</div>';
   }
