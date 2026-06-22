@@ -382,12 +382,14 @@ function calcProgress(p) {
     pct += 10;
   }
 
-  // Fase 4 — PM Y CURSO: los puntos solo suman cuando Fase 3 está completa (ENTREGADO).
-  // El estatus PROGRAMADO/EN PROCESO se reconoce, pero el % respeta el orden secuencial.
+  // Fase 4 — PM Y CURSO (solo suma si Fase 3 está completa):
+  // PROGRAMADO       → principio de fase → +0  (no suma)
+  // EN PROCESO       → mitad de fase     → +10
+  // TERMINADO/COMPLETADO/REALIZADO → final de fase → +20
   const f4Done   = (p.pm === 'TERMINADO' || p.pm === 'COMPLETADO' || p.pm === 'REALIZADO');
   const f4Active = (p.pm === 'PROGRAMADO' || p.pm === 'EN PROCESO' || f4Done);
   if (f3Done) {
-    if (p.pm === 'PROGRAMADO' || p.pm === 'EN PROCESO') {
+    if (p.pm === 'EN PROCESO') {
       pct += 10;
     } else if (f4Done) {
       pct += 20;
