@@ -370,11 +370,15 @@ function calcProgress(p) {
   if (docDone)  pct += 10;
   const f2Done = herrDone && docDone;
 
-  // Fase 3 — ENVÍO: 20% si ENTREGADO; 10% si SIN ENVIAR pero con fecha
+  // Fase 3 — ENVÍO Y DESCARGA (rango 40%–60% de la barra):
+  // SIN ENVIAR (con o sin fecha) → principio de fase → +0
+  // EN TRÁNSITO + fecha          → medio de fase    → +10
+  // ENTREGADO                    → final de fase    → +20
   const f3Done = (p.envio === 'ENTREGADO');
+  const f3Transit = (p.envio === 'EN TRÁNSITO' || p.envio === 'EN TRANSITO');
   if (f3Done) {
     pct += 20;
-  } else if (p.fechaEntrega) {
+  } else if (f3Transit) {
     pct += 10;
   }
 
