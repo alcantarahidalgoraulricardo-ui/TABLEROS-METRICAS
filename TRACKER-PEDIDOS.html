@@ -378,9 +378,10 @@ function calcProgress(p) {
     pct += 10;
   }
 
-  // Fase 4 — PM Y CURSO: 10% EN PROCESO; 20% TERMINADO/COMPLETADO/REALIZADO
-  const f4Done = (p.pm === 'TERMINADO' || p.pm === 'COMPLETADO' || p.pm === 'REALIZADO');
-  if (p.pm === 'EN PROCESO') {
+  // Fase 4 — PM Y CURSO: PROGRAMADO=10%; EN PROCESO=10%; TERMINADO/COMPLETADO/REALIZADO=20%
+  const f4Done   = (p.pm === 'TERMINADO' || p.pm === 'COMPLETADO' || p.pm === 'REALIZADO');
+  const f4Active = (p.pm === 'PROGRAMADO' || p.pm === 'EN PROCESO' || f4Done);
+  if (p.pm === 'PROGRAMADO' || p.pm === 'EN PROCESO') {
     pct += 10;
   } else if (f4Done) {
     pct += 20;
@@ -394,7 +395,9 @@ function calcProgress(p) {
   );
   if (f5Done) pct += 20;
 
-  // FASE ACTUAL = primera fase incompleta (trabajo activo), no la última rebasada
+  // FASE ACTUAL = primera fase incompleta (respeta el orden de fases).
+  // El % puede sumar puntos de fases en paralelo (ej: PM PROGRAMADO antes
+  // del envío), pero la etiqueta siempre indica la fase pendiente más temprana.
   let currentPhase;
   if (!f1Done)      currentPhase = 1;
   else if (!f2Done) currentPhase = 2;
@@ -592,7 +595,7 @@ function updateKPIs() {
     ? Math.round(liveData.reduce((s, p) => s + calcProgress(p).pct, 0) / total)
     : 0;
   const inPM    = liveData.filter(p =>
-    p.pm === 'EN PROCESO' || p.pm === 'TERMINADO' || p.pm === 'COMPLETADO' || p.pm === 'REALIZADO'
+    p.pm === 'PROGRAMADO' || p.pm === 'EN PROCESO' || p.pm === 'TERMINADO' || p.pm === 'COMPLETADO' || p.pm === 'REALIZADO'
   ).length;
   const pendEnc = liveData.filter(p =>
     !p.encuesta || p.encuesta === 'PENDIENTE' || p.encuesta === '-'
