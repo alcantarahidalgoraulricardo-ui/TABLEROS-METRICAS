@@ -527,7 +527,7 @@ function renderTrackers() {
 
   // Paso 2 — cuántas caben en el espacio disponible de ventana
   const topOffset    = viewport.getBoundingClientRect().top;
-  const bottomMargin = 24;
+  const bottomMargin = 4;
   const available    = window.innerHeight - topOffset - bottomMargin;
   VISIBLE_ROWS = Math.max(
     1,
@@ -658,6 +658,8 @@ window.addEventListener('resize', () => {
 
 refreshData();                        // primera carga inmediata
 setInterval(tickCountdown, 1000);    // contador regresivo
+// Re-calcular VISIBLE_ROWS después de que estilos carguen completamente
+setTimeout(() => { renderTrackers(); startTicker(); }, 300);
 </script>
 
 </body>
