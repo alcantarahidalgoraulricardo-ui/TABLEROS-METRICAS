@@ -16,7 +16,7 @@
   /* ── Barra de progreso ── */
   .progress-track {
     position: relative;
-    height: 36px;
+    height: 28px;
     background: #e5e7eb;
     border-radius: 999px;
     overflow: visible;
@@ -60,7 +60,7 @@
     position: absolute;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 34px; height: 34px;
+    width: 26px; height: 26px;
     transition: left 1.2s cubic-bezier(.4,0,.2,1);
     animation: spin 2.2s linear infinite;
     z-index: 2;
@@ -74,9 +74,9 @@
   /* ── Ícono de máquina flotante ── */
   .machine-icon {
     position: absolute;
-    top: -52px;
+    top: -38px;
     transform: translateX(-50%);
-    width: 46px; height: 46px;
+    width: 34px; height: 34px;
     border-radius: 10px;
     background: #fff;
     border: 2px solid currentColor;
@@ -427,8 +427,8 @@ function renderRow(p, colorIdx) {
   const tipLeft = Math.max(3, Math.min(pct, 96));
 
   return `
-    <div class="vslider-item" style="padding-bottom:16px">
-      <div class="card rounded-xl p-3">
+    <div class="vslider-item" style="padding-bottom:8px">
+      <div class="card rounded-xl p-2">
 
         <!-- Header de la tarjeta -->
         <div class="flex items-center justify-between mb-2">
@@ -442,7 +442,7 @@ function renderRow(p, colorIdx) {
         </div>
 
         <!-- Barra de progreso con margen superior para el ícono flotante -->
-        <div style="padding-top:48px; padding-bottom:20px; position:relative">
+        <div style="padding-top:34px; padding-bottom:14px; position:relative">
           <div class="progress-track">
 
             <!-- Marcadores verticales en 20/40/60/80% -->
