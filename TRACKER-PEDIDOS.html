@@ -378,8 +378,8 @@ function calcProgress(p) {
     pct += 10;
   }
 
-  // Fase 4 — PM Y CURSO: 10% EN PROCESO; 20% TERMINADO/COMPLETADO
-  const f4Done = (p.pm === 'TERMINADO' || p.pm === 'COMPLETADO');
+  // Fase 4 — PM Y CURSO: 10% EN PROCESO; 20% TERMINADO/COMPLETADO/REALIZADO
+  const f4Done = (p.pm === 'TERMINADO' || p.pm === 'COMPLETADO' || p.pm === 'REALIZADO');
   if (p.pm === 'EN PROCESO') {
     pct += 10;
   } else if (f4Done) {
@@ -592,7 +592,7 @@ function updateKPIs() {
     ? Math.round(liveData.reduce((s, p) => s + calcProgress(p).pct, 0) / total)
     : 0;
   const inPM    = liveData.filter(p =>
-    p.pm === 'EN PROCESO' || p.pm === 'TERMINADO' || p.pm === 'COMPLETADO'
+    p.pm === 'EN PROCESO' || p.pm === 'TERMINADO' || p.pm === 'COMPLETADO' || p.pm === 'REALIZADO'
   ).length;
   const pendEnc = liveData.filter(p =>
     !p.encuesta || p.encuesta === 'PENDIENTE' || p.encuesta === '-'
