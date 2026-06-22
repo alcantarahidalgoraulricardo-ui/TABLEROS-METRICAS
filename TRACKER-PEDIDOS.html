@@ -140,6 +140,8 @@
   .vslider-viewport {
     overflow: hidden;
     position: relative;
+    flex: 1 1 0;
+    min-height: 0;
   }
   .vslider-track {
     display: flex;
@@ -163,7 +165,7 @@
   </defs>
 </svg>
 
-<div class="w-full px-8 py-3">
+<div class="w-full px-8 py-3" style="height:100vh; display:flex; flex-direction:column;">
 
   <!-- ── Header ── -->
   <div class="flex items-center justify-between mb-3">
@@ -526,9 +528,9 @@ function renderTrackers() {
   cardHeight = (list.children[0] && list.children[0].offsetHeight) || 300;
 
   // Paso 2 — cuántas caben en el espacio disponible de ventana
-  const topOffset    = viewport.getBoundingClientRect().top;
-  const bottomMargin = 4;
-  const available    = window.innerHeight - topOffset - bottomMargin;
+  // El viewport ya ocupa todo el espacio restante vía CSS flex.
+  // Leemos su altura real para saber cuántas filas caben.
+  const available = viewport.getBoundingClientRect().height;
   VISIBLE_ROWS = Math.max(
     1,
     Math.min(liveData.length, Math.floor(available / cardHeight))
@@ -549,7 +551,7 @@ function renderTrackers() {
   tickerIndex = 0;
   void list.offsetHeight; // forzar reflow para que la siguiente transición tome efecto
 
-  viewport.style.height = (cardHeight * VISIBLE_ROWS) + 'px';
+  // La altura del viewport la controla CSS (flex:1), no JS.
   list.style.transition = ''; // restaurar transiciones
 }
 
