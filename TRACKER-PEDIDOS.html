@@ -13,22 +13,37 @@
     color: #e2e8f0;
   }
 
-  /* ── Barra de progreso ── */
+  /* ── Barra de progreso: 4 segmentos coloreados por estado de deadline ── */
   .progress-track {
     position: relative;
     height: 28px;
-    background: #e5e7eb;
+    background: transparent;
     border-radius: 999px;
     overflow: visible;
+    display: flex;
+    gap: 2px;
   }
-  .progress-fill {
-    height: 100%;
-    border-radius: 999px;
+  .phase-seg {
     position: relative;
-    transition: width 1.2s cubic-bezier(.4,0,.2,1);
-    background-size: 30px 30px;
-    animation: stripes 1.5s linear infinite;
+    flex: 1 1 0;
+    height: 100%;
+    background: #475569;
+    overflow: hidden;
+    transition: background-color .6s;
   }
+  .phase-seg:first-child { border-radius: 999px 0 0 999px; }
+  .phase-seg:last-child  { border-radius: 0 999px 999px 0; }
+  .phase-seg-fill {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    background-size: 24px 24px;
+    background-image: linear-gradient(45deg, rgba(255,255,255,.22) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.22) 50%, rgba(255,255,255,.22) 75%, transparent 75%, transparent);
+    animation: stripes 1.5s linear infinite;
+    transition: width 1.2s cubic-bezier(.4,0,.2,1);
+  }
+  .seg-green  { background: #16a34a; }
+  .seg-yellow { background: #ca8a04; }
+  .seg-red    { background: #dc2626; }
+  .seg-gray   { background: #475569; }
   @keyframes stripes {
     from { background-position: 0 0; }
     to   { background-position: 30px 0; }
@@ -249,7 +264,7 @@ const ORDER_COLORS = [
   '#0e7490','#be185d','#a16207','#4338ca'
 ];
 
-const PHASES = ['PEDIDO','HERRAMIENTA + DOC','ENVÍO Y DESCARGA','PM Y CURSO','ENCUESTA'];
+const PHASES = ['HERRAMIENTA + DOC','ENVÍO Y DESCARGA','PM Y CURSO','ENCUESTA'];
 
 // Estado global del visor
 let liveData     = [];
@@ -297,26 +312,41 @@ function fetchData(onDone) {
         section[c] = lastSec;
       }
 
-      // ── Construir el mapa columna → campo, por NOMBRE (robusto a que
-      //    el Sheet mueva columnas mientras conserve los encabezados).
+      // ── Construir el mapa columna → campo, por NOMBRE + SECCIÓN.
+      //    El Sheet tiene 4 fases; cada fase: DEADLINE + FECHA real + STATUS.
+      //    "INFORMACIÓN DEL PEDIDO" lleva: # PEDIDO, CLIENTE, VENDEDOR, FECHA (alta), HERRAMIENTA.
       const COL = {};
       for (let c = 0; c < headerRow.length; c++) {
         const h = headerRow[c], sec = section[c];
-        if      (h.includes('PEDIDO'))                      COL.id = c;
+
+        if      (h.includes('PEDIDO'))                          COL.id = c;
         else if (h.includes('CLIENTE') || h.includes('MAQUINA')) COL.cliente = c;
-        else if (h.includes('VENDEDOR'))                    COL.vendedor = c;
-        else if (h.includes('ENTREGA'))                     COL.fechaEntrega = c; // FECHA DE ENTREGA
-        else if (h.includes('PROGRAMADA'))                  COL.fechaPM = c;       // FECHA PROGRAMADA
-        else if (h.includes('RESULTADO'))                   COL.encuesta = c;
-        else if (h === 'STATUS') {
-          if      (sec.includes('HERAM') || sec.includes('HERRAM')) COL.herramienta = c;
-          else if (sec.includes('DOCUMENT'))                        COL.doc = c;
-          else if (sec.includes('ENV'))                             COL.envio = c;
-          else if (sec.includes('PM'))                              COL.pm = c;
+        else if (h.includes('VENDEDOR'))                        COL.vendedor = c;
+        else if (h === 'HERRAMIENTA')                           COL.tipoHerr = c;   // SI/NO LLEVA
+        else if (h.includes('RESULTADO'))                       COL.encuesta = c;
+        else if (h === 'FECHA' && !sec)                         COL.fecha = c;      // FECHA de alta del pedido
+        // Fase 1 — HERAMIENTA + DOC
+        else if (sec.includes('HERAM') || sec.includes('HERRAM')) {
+          if      (h === 'DEADLINE')        COL.deadlineF1 = c;
+          else if (h.includes('FECHA'))     COL.fechaF1    = c;
+          else if (h === 'STATUS')          COL.statusF1   = c;
         }
-        else if (h.includes('FECHA')) {
-          if      (sec.includes('ENCUESTA'))        COL.fechaEnc = c;
-          else if (COL.fecha === undefined)         COL.fecha = c; // primera FECHA = alta
+        // Fase 2 — ENVÍO
+        else if (sec.includes('ENV')) {
+          if      (h === 'DEADLINE')        COL.deadlineF2 = c;
+          else if (h.includes('FECHA'))     COL.fechaF2    = c; // fecha de entrega
+          else if (h === 'STATUS')          COL.envio      = c;
+        }
+        // Fase 3 — PM Y CURSO
+        else if (sec.includes('PM')) {
+          if      (h === 'DEADLINE')        COL.deadlineF3 = c;
+          else if (h.includes('FECHA'))     COL.fechaF3    = c; // fecha programada
+          else if (h === 'STATUS')          COL.pm         = c;
+        }
+        // Fase 4 — ENCUESTA
+        else if (sec.includes('ENCUESTA')) {
+          if      (h === 'DEADLINE')        COL.deadlineF4 = c;
+          else if (h.includes('FECHA'))     COL.fechaF4    = c;
         }
       }
 
@@ -326,23 +356,30 @@ function fetchData(onDone) {
       for (let i = headerIdx + 1; i < rows.length; i++) {
         const r = rows[i];
         const id = cell(r, 'id');
-        // Solo procesar filas con ID numérico real (ej: "26023") — ignorar
-        // filas de sección/agrupación que el Sheet inserta entre pedidos.
         if (!id || !/^\d+$/.test(id)) continue;
 
         pedidos.push({
           id,
-          cliente:      cell(r, 'cliente'),
-          vendedor:     cell(r, 'vendedor'),
-          fecha:        cell(r, 'fecha'),
-          herramienta:  cell(r, 'herramienta').toUpperCase(),
-          doc:          cell(r, 'doc').toUpperCase(),
-          fechaEntrega: cell(r, 'fechaEntrega'),
-          envio:        cell(r, 'envio').toUpperCase(),
-          fechaPM:      cell(r, 'fechaPM'),
-          pm:           cell(r, 'pm').toUpperCase(),
-          fechaEnc:     cell(r, 'fechaEnc'),
-          encuesta:     cell(r, 'encuesta').toUpperCase(),
+          cliente:    cell(r, 'cliente'),
+          vendedor:   cell(r, 'vendedor'),
+          fecha:      cell(r, 'fecha'),
+          tipoHerr:   cell(r, 'tipoHerr').toUpperCase(),
+          // Fase 1
+          statusF1:   cell(r, 'statusF1').toUpperCase(),
+          deadlineF1: cell(r, 'deadlineF1'),
+          fechaF1:    cell(r, 'fechaF1'),
+          // Fase 2
+          envio:      cell(r, 'envio').toUpperCase(),
+          deadlineF2: cell(r, 'deadlineF2'),
+          fechaF2:    cell(r, 'fechaF2'),
+          // Fase 3
+          pm:         cell(r, 'pm').toUpperCase(),
+          deadlineF3: cell(r, 'deadlineF3'),
+          fechaF3:    cell(r, 'fechaF3'),
+          // Fase 4
+          encuesta:   cell(r, 'encuesta').toUpperCase(),
+          deadlineF4: cell(r, 'deadlineF4'),
+          fechaF4:    cell(r, 'fechaF4'),
         });
       }
       onDone(pedidos);
@@ -354,76 +391,114 @@ function fetchData(onDone) {
 }
 
 // ─────────────────────────────────────────────────────────
-//  LÓGICA DE PROGRESO (5 fases × 20%)
+//  PARSING DE FECHAS Y ESTADO DE DEADLINE
+// ─────────────────────────────────────────────────────────
+function parseDate(str) {
+  if (!str) return null;
+  const m = str.toString().trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (!m) return null;
+  let d = parseInt(m[1], 10), mo = parseInt(m[2], 10), y = parseInt(m[3], 10);
+  if (isNaN(d) || isNaN(mo) || isNaN(y)) return null;
+  if (y < 100) y += 2000;
+  return new Date(y, mo - 1, d);
+}
+
+function phaseDone(p, n) {
+  if (n === 1) return p.statusF1 === 'TERMINADO';
+  if (n === 2) return p.envio === 'ENTREGADO';
+  if (n === 3) return p.pm === 'REALIZADO' || p.pm === 'TERMINADO' || p.pm === 'COMPLETADO';
+  if (n === 4) return !!(p.encuesta && p.encuesta !== 'PENDIENTE' && p.encuesta !== '-');
+  return false;
+}
+
+// Cuánto se llena cada segmento (0/50/100) según el estatus actual
+function phaseFillPct(p, n) {
+  if (n === 1) return p.statusF1 === 'TERMINADO' ? 100 : 0;
+  if (n === 2) {
+    if (p.envio === 'ENTREGADO') return 100;
+    if (p.envio === 'EN TRÁNSITO' || p.envio === 'EN TRANSITO') return 50;
+    return 0;
+  }
+  if (n === 3) {
+    if (phaseDone(p, 3)) return 100;
+    if (p.pm === 'EN PROCESO') return 50;
+    return 0; // PROGRAMADO / SIN PROGRAMAR / vacío → principio
+  }
+  if (n === 4) return phaseDone(p, 4) ? 100 : 0;
+  return 0;
+}
+
+// Color del segmento según deadline:
+// verde = completada · rojo = vencida · amarillo = pasó la mitad del tiempo · gris = default.
+// El "tiempo" de cada fase corre entre el deadline de la fase anterior y el deadline de la fase actual.
+// Para Fase 1 (no hay fase anterior), el principio es la fecha de alta del pedido.
+function phaseDeadlineState(p, n, today) {
+  if (phaseDone(p, n)) return 'green';
+  const deadline = parseDate(p['deadlineF' + n]);
+  if (!deadline) return 'gray';
+
+  let start;
+  if (n === 1) {
+    start = parseDate(p.fecha); // fecha de alta del pedido
+  } else {
+    start = parseDate(p['deadlineF' + (n - 1)]); // deadline de la fase anterior
+    if (!start) start = parseDate(p.fecha); // fallback si la fase anterior no tiene deadline
+  }
+  if (!start) return 'gray';
+
+  if (today > deadline) return 'red';
+  const mid = new Date((start.getTime() + deadline.getTime()) / 2);
+  if (today >= mid) return 'yellow';
+  return 'gray';
+}
+
+// ─────────────────────────────────────────────────────────
+//  LÓGICA DE PROGRESO (4 fases × 25%)
 // ─────────────────────────────────────────────────────────
 function calcProgress(p) {
   let pct = 0;
 
-  // Fase 1 — PEDIDO: 20% si hay # pedido y vendedor
-  const f1Done = !!(p.id && p.vendedor);
-  if (f1Done) pct += 20;
+  // Fase 1 — HERRAMIENTA + DOC: 25% si STATUS = TERMINADO
+  const f1Done = phaseDone(p, 1);
+  if (f1Done) pct += 25;
 
-  // Fase 2 — HERRAMIENTA + DOC: 10% + 10%
-  const herrDone = (p.herramienta === 'SI LLEVA' || p.herramienta === 'NO LLEVA');
-  const docDone  = (p.doc === 'TERMINADO');
-  if (herrDone) pct += 10;
-  if (docDone)  pct += 10;
-  const f2Done = herrDone && docDone;
-
-  // Fase 3 — ENVÍO Y DESCARGA (rango 40%–60% de la barra):
-  // SIN ENVIAR (con o sin fecha) → principio de fase → +0
-  // EN TRÁNSITO + fecha          → medio de fase    → +10
-  // ENTREGADO                    → final de fase    → +20
-  const f3Done = (p.envio === 'ENTREGADO');
-  const f3Transit = (p.envio === 'EN TRÁNSITO' || p.envio === 'EN TRANSITO');
-  if (f3Done) {
-    pct += 20;
-  } else if (f3Transit) {
-    pct += 10;
+  // Fase 2 — ENVÍO: SIN ENVIAR=0 · EN TRÁNSITO=12.5 (mitad) · ENTREGADO=25 (final).
+  // Solo suma si Fase 1 está completa (orden secuencial).
+  const f2Done    = phaseDone(p, 2);
+  const f2Transit = (p.envio === 'EN TRÁNSITO' || p.envio === 'EN TRANSITO');
+  if (f1Done) {
+    if (f2Done) pct += 25;
+    else if (f2Transit) pct += 12.5;
   }
 
-  // Fase 4 — PM Y CURSO (solo suma si Fase 3 está completa):
-  // PROGRAMADO       → principio de fase → +0  (no suma)
-  // EN PROCESO       → mitad de fase     → +10
-  // TERMINADO/COMPLETADO/REALIZADO → final de fase → +20
-  const f4Done   = (p.pm === 'TERMINADO' || p.pm === 'COMPLETADO' || p.pm === 'REALIZADO');
-  const f4Active = (p.pm === 'PROGRAMADO' || p.pm === 'EN PROCESO' || f4Done);
-  if (f3Done) {
-    if (p.pm === 'EN PROCESO') {
-      pct += 10;
-    } else if (f4Done) {
-      pct += 20;
-    }
+  // Fase 3 — PM Y CURSO: PROGRAMADO=0 (principio) · EN PROCESO=12.5 (mitad) · REALIZADO/TERMINADO=25 (final).
+  // Solo suma si Fase 2 está entregada.
+  const f3Done = phaseDone(p, 3);
+  if (f2Done) {
+    if (f3Done) pct += 25;
+    else if (p.pm === 'EN PROCESO') pct += 12.5;
   }
 
-  // Fase 5 — ENCUESTA: 20% si resultado ≠ PENDIENTE y ≠ "-" y ≠ ""
-  const f5Done = !!(
-    p.encuesta &&
-    p.encuesta !== 'PENDIENTE' &&
-    p.encuesta !== '-'
-  );
-  if (f5Done) pct += 20;
+  // Fase 4 — ENCUESTA: 25% si REALIZADO. Solo suma si Fase 3 está completa.
+  const f4Done = phaseDone(p, 4);
+  if (f3Done && f4Done) pct += 25;
 
-  // FASE ACTUAL = primera fase incompleta (respeta el orden de fases).
-  // El % puede sumar puntos de fases en paralelo (ej: PM PROGRAMADO antes
-  // del envío), pero la etiqueta siempre indica la fase pendiente más temprana.
+  // Fase actual = primera incompleta
   let currentPhase;
   if (!f1Done)      currentPhase = 1;
   else if (!f2Done) currentPhase = 2;
   else if (!f3Done) currentPhase = 3;
-  else if (!f4Done) currentPhase = 4;
-  else              currentPhase = 5;
+  else              currentPhase = 4;
 
-  return { pct: Math.min(pct, 100), currentPhase };
+  return { pct: Math.round(Math.min(pct, 100)), currentPhase };
 }
 
 function phaseStyle(phase) {
   const map = {
-    1: { color: '#2563eb', label: 'Pedido' },
-    2: { color: '#8b5cf6', label: 'Herramienta + Doc' },
-    3: { color: '#ea580c', label: 'Envío y descarga' },
-    4: { color: '#16a34a', label: 'PM y curso' },
-    5: { color: '#ca8a04', label: 'Encuesta / Cerrado' },
+    1: { color: '#8b5cf6', label: 'Herramienta + Doc' },
+    2: { color: '#ea580c', label: 'Envío y descarga' },
+    3: { color: '#16a34a', label: 'PM y curso' },
+    4: { color: '#ca8a04', label: 'Encuesta / Cerrado' },
   };
   return map[phase] || map[1];
 }
@@ -434,8 +509,17 @@ function phaseStyle(phase) {
 function renderRow(p, colorIdx) {
   const { pct, currentPhase } = calcProgress(p);
   const phase      = phaseStyle(currentPhase);
-  const orderGrad  = ORDER_PALETTE[colorIdx % ORDER_PALETTE.length];
   const orderColor = ORDER_COLORS[colorIdx % ORDER_COLORS.length];
+
+  // Hoy a medianoche para comparar fechas sin afectar por la hora.
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Estado y relleno por segmento (4 fases)
+  const stateClass = { green:'seg-green', yellow:'seg-yellow', red:'seg-red', gray:'seg-gray' };
+  const segments = [1,2,3,4].map(n => ({
+    state: phaseDeadlineState(p, n, today),
+    fill:  phaseFillPct(p, n),
+  }));
 
   // Clamp para que el spinner/máquina no salga de la barra
   const tipLeft = Math.max(3, Math.min(pct, 96));
@@ -455,18 +539,15 @@ function renderRow(p, colorIdx) {
           <span class="text-base font-medium" style="color:${phase.color}">${phase.label}</span>
         </div>
 
-        <!-- Barra de progreso con margen superior para el ícono flotante -->
+        <!-- Barra de progreso: 4 segmentos coloreados por estado de deadline -->
         <div style="padding-top:24px; padding-bottom:6px; position:relative">
           <div class="progress-track">
 
-            <!-- Marcadores verticales en 20/40/60/80% -->
-            <div class="phase-marker" style="left:20%"></div>
-            <div class="phase-marker" style="left:40%"></div>
-            <div class="phase-marker" style="left:60%"></div>
-            <div class="phase-marker" style="left:80%"></div>
-
-            <!-- Relleno animado con gradiente único por pedido -->
-            <div class="progress-fill ${orderGrad}" style="width:${pct}%"></div>
+            ${segments.map(s => `
+              <div class="phase-seg ${stateClass[s.state]}">
+                <div class="phase-seg-fill" style="width:${s.fill}%"></div>
+              </div>
+            `).join('')}
 
             <!-- Porcentaje dentro de la barra -->
             <span class="pct-label">${pct}%</span>
