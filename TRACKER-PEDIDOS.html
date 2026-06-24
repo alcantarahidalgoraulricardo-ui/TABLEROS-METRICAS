@@ -151,13 +151,20 @@
   .kpi-value { font-size: 22px; font-weight: 700; color: #f1f5f9; line-height: 1; white-space:nowrap; }
   .kpi-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; line-height:1.2; }
 
-  /* ── Visor vertical estilo aeropuerto ── */
+  /* ── Visor vertical: auto-scroll + scroll manual con el mouse ── */
   .vslider-viewport {
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
     flex: 1 1 0;
     min-height: 0;
+    scroll-behavior: smooth;
   }
+  /* Scrollbar discreto */
+  .vslider-viewport::-webkit-scrollbar { width: 8px; }
+  .vslider-viewport::-webkit-scrollbar-track { background: transparent; }
+  .vslider-viewport::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  .vslider-viewport::-webkit-scrollbar-thumb:hover { background: #475569; }
   .vslider-track {
     display: flex;
     flex-direction: column;
@@ -629,45 +636,55 @@ function renderTrackers() {
     Math.min(liveData.length, Math.floor(available / cardHeight))
   );
 
-  // Paso 3 — re-render duplicando las primeras VISIBLE_ROWS al final
-  // para el loop continuo sin salto visible (técnica: clone buffer)
-  const needsLoop  = liveData.length > VISIBLE_ROWS;
-  const renderData = needsLoop
-    ? [...liveData, ...liveData.slice(0, VISIBLE_ROWS)]
-    : liveData;
+  // Paso 3 — render real (sin duplicados; el loop se hace volviendo a top).
+  buildList(liveData);
 
-  buildList(renderData);
-
-  // Reiniciar posición instantáneamente (sin transición)
-  list.style.transition = 'none';
-  list.style.transform  = 'translateY(0px)';
+  // Reset de posición (sin transform — ahora usamos scrollTop nativo)
+  viewport.scrollTop = 0;
   tickerIndex = 0;
-  void list.offsetHeight; // forzar reflow para que la siguiente transición tome efecto
 
-  // La altura del viewport la controla CSS (flex:1), no JS.
-  list.style.transition = ''; // restaurar transiciones
+  attachUserScrollDetection(viewport);
 }
 
 // ─────────────────────────────────────────────────────────
-//  TICKER — desliza hacia abajo 1 tarjeta cada 4 s
+//  TICKER + detección de scroll manual del usuario
 // ─────────────────────────────────────────────────────────
+let userScrolling   = false;
+let userScrollTimer = null;
+let scrollDetectorAttached = false;
+
+function attachUserScrollDetection(viewport) {
+  if (scrollDetectorAttached) return;
+  scrollDetectorAttached = true;
+  const onInteract = () => {
+    userScrolling = true;
+    clearTimeout(userScrollTimer);
+    userScrollTimer = setTimeout(() => {
+      userScrolling = false;
+      // Sincronizar tickerIndex al lugar donde quedó el usuario
+      if (cardHeight) tickerIndex = Math.round(viewport.scrollTop / cardHeight);
+    }, 8000); // 8 s sin interactuar → vuelve el auto-scroll
+  };
+  viewport.addEventListener('wheel',      onInteract, { passive: true });
+  viewport.addEventListener('touchstart', onInteract, { passive: true });
+  viewport.addEventListener('mousedown',  onInteract, { passive: true });
+}
+
 function tickerStep() {
-  const list = document.getElementById('trackers');
+  const viewport = document.getElementById('vsliderViewport');
   if (!cardHeight || liveData.length <= VISIBLE_ROWS) return;
+  if (userScrolling) return; // pausado mientras el usuario está navegando
+
+  // Si ya está al fondo, vuelve a top
+  const atBottom = viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 2;
+  if (atBottom) {
+    tickerIndex = 0;
+    viewport.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
 
   tickerIndex++;
-  list.style.transition = 'transform 1.1s cubic-bezier(.4,0,.2,1)';
-  list.style.transform  = `translateY(-${tickerIndex * cardHeight}px)`;
-
-  // Al llegar a los duplicados → reset instantáneo al inicio
-  if (tickerIndex === liveData.length) {
-    setTimeout(() => {
-      list.style.transition = 'none';
-      list.style.transform  = 'translateY(0px)';
-      tickerIndex = 0;
-      void list.offsetHeight;
-    }, 1100); // esperar a que termine la transición de 1.1 s
-  }
+  viewport.scrollTo({ top: tickerIndex * cardHeight, behavior: 'smooth' });
 }
 
 function startTicker() {
