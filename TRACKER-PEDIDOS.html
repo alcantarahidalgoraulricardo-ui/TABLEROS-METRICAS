@@ -482,11 +482,13 @@ function segment23Info(p, n, today) {
   return { fill: statusFillPct(status), color: '#16a34a' }; // en progreso, verde
 }
 
-// Fase 4 (Encuesta): amarillo fijo al 50% mientras está pendiente; si pasan los
-// 3 días automáticos desde que PM y curso se realizó, la caja entera pasa a rojo;
-// si ya se registró resultado, la caja entera pasa a verde.
+// Fase 4 (Encuesta): SOLO se activa cuando PM y curso ya está REALIZADO.
+// Si PM aún no termina → gris vacío (0%).
+// Una vez activa: amarillo al 50% mientras está pendiente; rojo si pasan los
+// 3 días automáticos desde que PM y curso se realizó; verde si ya hay resultado.
 function segment4Info(p, today) {
   if (phaseDone(p, 4)) return { fill: 100, color: '#16a34a' };
+  if (!phaseDone(p, 3)) return { fill: 0, color: '#64748b' }; // PM no realizado → inactiva
   const deadline = encuestaDeadline(p);
   if (deadline && today > deadline) return { fill: 100, color: '#dc2626' };
   return { fill: 50, color: '#eab308' };
@@ -552,9 +554,10 @@ function calcProgress(p) {
   const f3Done = phaseDone(p, 3);
   if (f2Done) pct += 25 * (statusFillPct(p.pm) / 100);
 
-  // Fase 4 — ENCUESTA: 25% si REALIZADO. Solo suma si Fase 3 está completa.
+  // Fase 4 — ENCUESTA: el spinner sigue el fill del segmento (50% amarillo si
+  // pendiente-activa, 100% si realizada/vencida). Solo se activa si PM está realizado.
   const f4Done = phaseDone(p, 4);
-  if (f3Done && f4Done) pct += 25;
+  if (f3Done) pct += 25 * (segment4Info(p, today).fill / 100);
 
   // Fase actual = primera incompleta
   let currentPhase;
