@@ -120,7 +120,7 @@
   }
 
   /* ── Ícono de camión (Fase 2: envío en curso) ── */
-  .truck-wheel { animation: truck-spin .6s linear infinite; transform-origin: center; }
+  .truck-wheel { animation: truck-spin .6s linear infinite; transform-box: fill-box; transform-origin: center; }
   @keyframes truck-spin { to { transform: rotate(360deg); } }
   .truck-motion rect { animation: truck-motion .5s ease-in-out infinite; }
   @keyframes truck-motion {
@@ -193,6 +193,29 @@
       <path d="M 6 50 A 29 29 0 0 1 35 21 L 35 36 A 14 14 0 0 0 21 50 Z" fill="#111111"/>
       <circle cx="50" cy="50" r="14" fill="currentColor"/>
     </symbol>
+
+    <!-- Gradientes para el camión 3D -->
+    <linearGradient id="truckBoxTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="truckBoxFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f1f5f9"/>
+      <stop offset="1" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <linearGradient id="truckCab" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="truckGlass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e0f2fe"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <radialGradient id="truckTire" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#475569"/>
+      <stop offset="0.55" stop-color="#1f2937"/>
+      <stop offset="1" stop-color="#0b1220"/>
+    </radialGradient>
   </defs>
 </svg>
 
@@ -494,6 +517,36 @@ function segment4Info(p, today) {
   return { fill: 50, color: '#eab308' };
 }
 
+// Fecha corta dd/mm a partir de un objeto Date
+function fmtDate(d) {
+  if (!d) return '';
+  return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+}
+// Limpia valores no-fecha ("NA", "N/A", "-", vacío)
+function cleanDate(s) {
+  if (!s) return '';
+  const t = s.toString().trim();
+  if (!t || /^N\/?A$/i.test(t) || t === '-') return '';
+  return t;
+}
+// Etiqueta de fecha en el extremo derecho de cada segmento:
+//   fase completada → fecha real del Sheet (terminado/entregado/programado/encuesta), verde;
+//   pendiente → deadline de la fase (rojo si ya venció, gris si aún en plazo);
+//   Fase 4 sin PM realizado → sin etiqueta (inactiva).
+function phaseTag(p, n, today) {
+  if (phaseDone(p, n)) {
+    const actual = n === 1 ? p.fechaF1 : n === 2 ? p.fechaF2 : n === 3 ? p.fechaF3 : p.fechaF4;
+    return { text: cleanDate(actual), color: '#22c55e' };
+  }
+  if (n === 4) {
+    if (!phaseDone(p, 3)) return { text: '', color: '' };
+    const d = encuestaDeadline(p);
+    return { text: d ? fmtDate(d) : '', color: (d && today > d) ? '#f87171' : '#94a3b8' };
+  }
+  const dlDate = parseDate(p['deadlineF' + n]);
+  return { text: cleanDate(p['deadlineF' + n]), color: (dlDate && today > dlDate) ? '#f87171' : '#94a3b8' };
+}
+
 // ─────────────────────────────────────────────────────────
 //  FASE 1 — avance por TIEMPO (días desde alta hasta deadline)
 //  El spinner avanza cada día. El color del avance logrado:
@@ -643,22 +696,39 @@ function renderRow(p, colorIdx) {
             <div class="machine-icon" style="left:${tipLeft}%; color:${orderColor}">
               ${showTruck ? `
               <svg class="cnc-svg" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <!-- caja del camión -->
-                <rect x="4" y="16" width="24" height="16" rx="1.5" fill="currentColor"/>
-                <!-- cabina -->
-                <path d="M28 20 h9 l7 7 v5 h-16 z" fill="currentColor" opacity=".85"/>
-                <!-- ventana cabina -->
-                <rect x="31" y="22" width="6" height="6" rx="1" fill="#fff" opacity=".55"/>
-                <!-- llantas -->
-                <circle class="truck-wheel" cx="13" cy="34" r="4" fill="#1f2937"/>
-                <circle cx="13" cy="34" r="1.6" fill="currentColor"/>
-                <circle class="truck-wheel" cx="36" cy="34" r="4" fill="#1f2937"/>
-                <circle cx="36" cy="34" r="1.6" fill="currentColor"/>
+                <!-- sombra en el piso -->
+                <ellipse cx="24" cy="40" rx="18" ry="2.4" fill="#000" opacity=".22"/>
                 <!-- líneas de movimiento -->
-                <g class="truck-motion" opacity=".7">
-                  <rect x="0" y="19" width="5" height="1.6" rx=".8" fill="currentColor"/>
-                  <rect x="0" y="24" width="7" height="1.6" rx=".8" fill="currentColor"/>
-                  <rect x="0" y="29" width="4" height="1.6" rx=".8" fill="currentColor"/>
+                <g class="truck-motion" opacity=".55">
+                  <rect x="0" y="18" width="5" height="1.6" rx=".8" fill="currentColor"/>
+                  <rect x="0" y="23" width="7" height="1.6" rx=".8" fill="currentColor"/>
+                  <rect x="0" y="28" width="4" height="1.6" rx=".8" fill="currentColor"/>
+                </g>
+                <!-- CAJA de carga (extrusión 3D isométrica) -->
+                <polygon points="6,14 25,14 29,10 10,10" fill="url(#truckBoxTop)"/>            <!-- cara superior -->
+                <polygon points="25,14 29,10 29,26 25,30" fill="#94a3b8"/>                     <!-- cara lateral -->
+                <rect x="6" y="14" width="19" height="16" rx="1" fill="url(#truckBoxFront)"/>   <!-- cara frontal -->
+                <rect x="7.5" y="16" width="16" height="1.4" rx=".7" fill="#fff" opacity=".7"/> <!-- brillo -->
+                <!-- CABINA 3D -->
+                <path d="M25 20 h9 l6 6 v4 h-15 z" fill="url(#truckCab)"/>
+                <polygon points="25,20 34,20 37,17 28,17" fill="#93c5fd"/>                      <!-- techo cabina -->
+                <path d="M34.4 20.6 h4.2 l3.2 4 h-7.4 z" fill="url(#truckGlass)"/>               <!-- parabrisas -->
+                <line x1="35" y1="21" x2="41" y2="24.4" stroke="#fff" stroke-width="0.7" opacity=".8"/>
+                <!-- faro y defensa -->
+                <rect x="39.2" y="27" width="2.4" height="2.4" rx=".5" fill="#fde68a"/>
+                <rect x="24" y="30" width="17" height="2" rx="1" fill="#0f172a"/>
+                <!-- LLANTAS con volumen (rin girando con radios) -->
+                <circle cx="13" cy="32" r="4.2" fill="url(#truckTire)"/>
+                <g class="truck-wheel">
+                  <circle cx="13" cy="32" r="2" fill="#cbd5e1"/>
+                  <line x1="11" y1="32" x2="15" y2="32" stroke="#64748b" stroke-width=".7"/>
+                  <line x1="13" y1="30" x2="13" y2="34" stroke="#64748b" stroke-width=".7"/>
+                </g>
+                <circle cx="34" cy="32" r="4.2" fill="url(#truckTire)"/>
+                <g class="truck-wheel">
+                  <circle cx="34" cy="32" r="2" fill="#cbd5e1"/>
+                  <line x1="32" y1="32" x2="36" y2="32" stroke="#64748b" stroke-width=".7"/>
+                  <line x1="34" y1="30" x2="34" y2="34" stroke="#64748b" stroke-width=".7"/>
                 </g>
               </svg>
               ` : `
@@ -690,8 +760,16 @@ function renderRow(p, colorIdx) {
 
           </div>
 
-          <!-- Etiquetas de las 5 fases debajo de la barra -->
-          <div style="display:flex;justify-content:space-between;margin-top:10px;padding:0 4px">
+          <!-- Fechas: deadline de cada fase (o fecha real cuando está completa), al extremo derecho del segmento -->
+          <div style="display:flex;margin-top:3px;padding:0 2px">
+            ${[1,2,3,4].map(n => {
+              const t = phaseTag(p, n, today);
+              return `<span style="flex:1;text-align:right;font-size:10px;font-weight:600;color:${t.color};padding-right:4px;line-height:1;white-space:nowrap">${t.text}</span>`;
+            }).join('')}
+          </div>
+
+          <!-- Etiquetas de las 4 fases debajo de la barra -->
+          <div style="display:flex;justify-content:space-between;margin-top:4px;padding:0 4px">
             ${PHASES.map(ph =>
               `<span class="phase-label" style="flex:1;text-align:center">${ph}</span>`
             ).join('')}
