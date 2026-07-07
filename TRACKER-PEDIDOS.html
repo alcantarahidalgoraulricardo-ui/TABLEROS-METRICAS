@@ -119,6 +119,15 @@
     50% { margin-top: -5px; }
   }
 
+  /* ── Ícono de camión (Fase 2: envío en curso) ── */
+  .truck-wheel { animation: truck-spin .6s linear infinite; transform-origin: center; }
+  @keyframes truck-spin { to { transform: rotate(360deg); } }
+  .truck-motion rect { animation: truck-motion .5s ease-in-out infinite; }
+  @keyframes truck-motion {
+    0%, 100% { opacity: .3; transform: translateX(2px); }
+    50%      { opacity: .8; transform: translateX(-1px); }
+  }
+
   /* ── Ícono SVG animado de máquina CNC (centro de maquinado vertical) ── */
   .machine-icon svg.cnc-svg { width: 100%; height: 100%; display: block; padding: 5px; }
   .cnc-head { animation: cnc-plunge 1.3s ease-in-out infinite; }
@@ -410,6 +419,21 @@ function parseDate(str) {
   return new Date(y, mo - 1, d);
 }
 
+// La columna FECHA de PM y curso a veces guarda un rango ("29/6 - 6/07")
+// sin año. Tomamos la fecha final del rango como "fecha en que se realizó",
+// usando el año del pedido (columna FECHA de alta) como referencia.
+function parseRangeEndDate(str, fallbackYear) {
+  if (!str) return null;
+  const last = str.toString().split('-').pop().trim();
+  const m = last.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  if (m) {
+    const d = parseInt(m[1], 10), mo = parseInt(m[2], 10);
+    if (isNaN(d) || isNaN(mo)) return null;
+    return new Date(fallbackYear, mo - 1, d);
+  }
+  return parseDate(last); // por si viene con año completo
+}
+
 function phaseDone(p, n) {
   if (n === 1) return p.statusF1 === 'TERMINADO';
   if (n === 2) return p.envio === 'ENTREGADO';
@@ -418,45 +442,54 @@ function phaseDone(p, n) {
   return false;
 }
 
-// Cuánto se llena cada segmento (0/50/100) según el estatus actual
-function phaseFillPct(p, n) {
-  if (n === 1) return p.statusF1 === 'TERMINADO' ? 100 : 0;
-  if (n === 2) {
-    if (p.envio === 'ENTREGADO') return 100;
-    if (p.envio === 'EN TRÁNSITO' || p.envio === 'EN TRANSITO') return 50;
-    return 0;
-  }
+// Fecha en que se completó cada fase (para deadline automático de Fase 4 y auto-ocultar)
+function phaseDoneDate(p, n) {
   if (n === 3) {
-    if (phaseDone(p, 3)) return 100;
-    if (p.pm === 'EN PROCESO') return 50;
-    return 0; // PROGRAMADO / SIN PROGRAMAR / vacío → principio
+    const altaYear = (parseDate(p.fecha) || new Date()).getFullYear();
+    return parseRangeEndDate(p.fechaF3, altaYear);
   }
-  if (n === 4) return phaseDone(p, 4) ? 100 : 0;
-  return 0;
+  if (n === 4) return parseDate(p.fechaF4);
+  return null;
 }
 
-// Color del segmento según deadline:
-// verde = completada · rojo = vencida · amarillo = pasó la mitad del tiempo · gris = default.
-// El "tiempo" de cada fase corre entre el deadline de la fase anterior y el deadline de la fase actual.
-// Para Fase 1 (no hay fase anterior), el principio es la fecha de alta del pedido.
-function phaseDeadlineState(p, n, today) {
-  if (phaseDone(p, n)) return 'green';
+// Deadline automático de Fase 4 (Encuesta): 3 días después de que PM y curso se realizó.
+// Se calcula en JS, ignorando cualquier deadline manual del Sheet.
+function encuestaDeadline(p) {
+  const donePM = phaseDoneDate(p, 3);
+  if (!donePM) return null;
+  const d = new Date(donePM);
+  d.setDate(d.getDate() + 3);
+  return d;
+}
+
+// Fase 2 (ENVÍO) y Fase 3 (PM): estatus intermedios → 0/50/75/100.
+// SIN ENVIAR / SIN PROGRAMAR → 0 · PROGRAMADO → 50 · EN TRÁNSITO/EN PROCESO → 75 · ENTREGADO/REALIZADO → 100
+function statusFillPct(status) {
+  if (status === 'ENTREGADO' || status === 'REALIZADO' || status === 'TERMINADO' || status === 'COMPLETADO') return 100;
+  if (status === 'EN TRÁNSITO' || status === 'EN TRANSITO' || status === 'EN PROCESO') return 75;
+  if (status === 'PROGRAMADO') return 50;
+  return 0; // SIN ENVIAR / SIN PROGRAMAR / vacío
+}
+
+// Fase 2 (Envío) y Fase 3 (PM): la CAJA del segmento siempre queda gris; solo el
+// AVANCE logrado (fill%) se pinta — verde mientras esté dentro de plazo, y si el
+// deadline se cumple sin completar la fase, la caja entera pasa a rojo (fill 100%).
+function segment23Info(p, n, today) {
+  if (phaseDone(p, n)) return { fill: 100, color: '#16a34a' }; // completada
   const deadline = parseDate(p['deadlineF' + n]);
-  if (!deadline) return 'gray';
+  if (deadline && today > deadline) return { fill: 100, color: '#dc2626' }; // vencida
+  const status = (n === 2) ? p.envio : p.pm;
+  return { fill: statusFillPct(status), color: '#16a34a' }; // en progreso, verde
+}
 
-  let start;
-  if (n === 1) {
-    start = parseDate(p.fecha); // fecha de alta del pedido
-  } else {
-    start = parseDate(p['deadlineF' + (n - 1)]); // deadline de la fase anterior
-    if (!start) start = parseDate(p.fecha); // fallback si la fase anterior no tiene deadline
-  }
-  if (!start) return 'gray';
-
-  if (today > deadline) return 'red';
-  const mid = new Date((start.getTime() + deadline.getTime()) / 2);
-  if (today >= mid) return 'yellow';
-  return 'gray';
+// Fase 4 (Encuesta): amarillo fijo al 50% mientras está pendiente; si pasan los
+// 3 días automáticos desde que PM y curso se realizó, la caja entera pasa a rojo;
+// si ya se registró resultado, la caja entera pasa a verde.
+function segment4Info(p, today) {
+  if (phaseDone(p, 4)) return { fill: 100, color: '#16a34a' };
+  const deadline = encuestaDeadline(p);
+  if (deadline && today > deadline) return { fill: 100, color: '#dc2626' };
+  return { fill: 50, color: '#eab308' };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -509,22 +542,15 @@ function calcProgress(p) {
   if (f1Done) pct += 25;
   else        pct += 25 * phase1Info(p, today).t;
 
-  // Fase 2 — ENVÍO: SIN ENVIAR=0 · EN TRÁNSITO=12.5 (mitad) · ENTREGADO=25 (final).
+  // Fase 2 — ENVÍO: SIN ENVIAR=0 · PROGRAMADO=12.5 · EN TRÁNSITO=18.75 · ENTREGADO=25.
   // Solo suma si Fase 1 está completa (orden secuencial).
-  const f2Done    = phaseDone(p, 2);
-  const f2Transit = (p.envio === 'EN TRÁNSITO' || p.envio === 'EN TRANSITO');
-  if (f1Done) {
-    if (f2Done) pct += 25;
-    else if (f2Transit) pct += 12.5;
-  }
+  const f2Done = phaseDone(p, 2);
+  if (f1Done) pct += 25 * (statusFillPct(p.envio) / 100);
 
-  // Fase 3 — PM Y CURSO: PROGRAMADO=0 (principio) · EN PROCESO=12.5 (mitad) · REALIZADO/TERMINADO=25 (final).
+  // Fase 3 — PM Y CURSO: SIN PROGRAMAR=0 · PROGRAMADO=12.5 · EN PROCESO=18.75 · REALIZADO=25.
   // Solo suma si Fase 2 está entregada.
   const f3Done = phaseDone(p, 3);
-  if (f2Done) {
-    if (f3Done) pct += 25;
-    else if (p.pm === 'EN PROCESO') pct += 12.5;
-  }
+  if (f2Done) pct += 25 * (statusFillPct(p.pm) / 100);
 
   // Fase 4 — ENCUESTA: 25% si REALIZADO. Solo suma si Fase 3 está completa.
   const f4Done = phaseDone(p, 4);
@@ -561,17 +587,21 @@ function renderRow(p, colorIdx) {
   // Hoy a medianoche para comparar fechas sin afectar por la hora.
   const today = new Date(); today.setHours(0,0,0,0);
 
-  // Estado y relleno por segmento (4 fases).
-  // Fase 1 = avance por TIEMPO (fill + color graduado); fases 2–4 = por estatus.
-  const stateClass = { green:'seg-green', yellow:'seg-yellow', red:'seg-red', gray:'seg-gray' };
+  // Relleno + color por segmento (4 fases). La caja siempre es gris;
+  // solo el avance logrado (fill%) se pinta del color correspondiente.
   const f1 = phase1Info(p, today);
-  const segments = [1,2,3,4].map(n => {
-    if (n === 1) return { kind:'time', fill: f1.fill, color: f1.color };
-    return { kind:'status', state: phaseDeadlineState(p, n, today), fill: phaseFillPct(p, n) };
-  });
+  const segments = [
+    { fill: f1.fill, color: f1.color },
+    segment23Info(p, 2, today),
+    segment23Info(p, 3, today),
+    segment4Info(p, today),
+  ];
 
   // Clamp para que el spinner/máquina no salga de la barra
   const tipLeft = Math.max(3, Math.min(pct, 96));
+
+  // Ícono flotante: camión durante Envío y descarga (Fase 2 en curso), máquina en el resto.
+  const showTruck = (currentPhase === 2 && !phaseDone(p, 2));
 
   return `
     <div class="vslider-item" style="padding-bottom:6px">
@@ -592,14 +622,11 @@ function renderRow(p, colorIdx) {
         <div style="padding-top:24px; padding-bottom:6px; position:relative">
           <div class="progress-track">
 
-            ${segments.map(s => s.kind === 'time'
-              ? `<div class="phase-seg seg-gray">
-                   <div class="phase-seg-fill" style="width:${s.fill}%; background-color:${s.color}"></div>
-                 </div>`
-              : `<div class="phase-seg ${stateClass[s.state]}">
-                   <div class="phase-seg-fill" style="width:${s.fill}%"></div>
-                 </div>`
-            ).join('')}
+            ${segments.map(s => `
+              <div class="phase-seg seg-gray">
+                <div class="phase-seg-fill" style="width:${s.fill}%; background-color:${s.color}"></div>
+              </div>
+            `).join('')}
 
             <!-- Porcentaje dentro de la barra -->
             <span class="pct-label">${pct}%</span>
@@ -609,8 +636,29 @@ function renderRow(p, colorIdx) {
               <use href="#spinner-petals"/>
             </svg>
 
-            <!-- Ícono flotante de la máquina sobre el punto de avance -->
+            <!-- Ícono flotante: camión (envío en curso) o máquina CNC (resto de fases) -->
             <div class="machine-icon" style="left:${tipLeft}%; color:${orderColor}">
+              ${showTruck ? `
+              <svg class="cnc-svg" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <!-- caja del camión -->
+                <rect x="4" y="16" width="24" height="16" rx="1.5" fill="currentColor"/>
+                <!-- cabina -->
+                <path d="M28 20 h9 l7 7 v5 h-16 z" fill="currentColor" opacity=".85"/>
+                <!-- ventana cabina -->
+                <rect x="31" y="22" width="6" height="6" rx="1" fill="#fff" opacity=".55"/>
+                <!-- llantas -->
+                <circle class="truck-wheel" cx="13" cy="34" r="4" fill="#1f2937"/>
+                <circle cx="13" cy="34" r="1.6" fill="currentColor"/>
+                <circle class="truck-wheel" cx="36" cy="34" r="4" fill="#1f2937"/>
+                <circle cx="36" cy="34" r="1.6" fill="currentColor"/>
+                <!-- líneas de movimiento -->
+                <g class="truck-motion" opacity=".7">
+                  <rect x="0" y="19" width="5" height="1.6" rx=".8" fill="currentColor"/>
+                  <rect x="0" y="24" width="7" height="1.6" rx=".8" fill="currentColor"/>
+                  <rect x="0" y="29" width="4" height="1.6" rx=".8" fill="currentColor"/>
+                </g>
+              </svg>
+              ` : `
               <svg class="cnc-svg" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                 <!-- base -->
                 <rect x="6" y="38" width="36" height="5" rx="1.5" fill="currentColor"/>
@@ -634,6 +682,7 @@ function renderRow(p, colorIdx) {
                   </g>
                 </g>
               </svg>
+              `}
             </div>
 
           </div>
@@ -776,7 +825,18 @@ function refreshData() {
   hideStatus();
 
   fetchData(pedidos => {
-    liveData = pedidos;
+    // Auto-ocultar pedidos 100% completados 3 días después de la fecha de
+    // resultado de encuesta (cierre total del pedido).
+    const today = new Date(); today.setHours(0,0,0,0);
+    liveData = pedidos.filter(p => {
+      const allDone = phaseDone(p, 1) && phaseDone(p, 2) && phaseDone(p, 3) && phaseDone(p, 4);
+      if (!allDone) return true;
+      const closedAt = parseDate(p.fechaF4);
+      if (!closedAt) return true; // sin fecha registrada, no se oculta
+      const hideAfter = new Date(closedAt);
+      hideAfter.setDate(hideAfter.getDate() + 3);
+      return today <= hideAfter;
+    });
 
     if (!liveData.length) {
       showStatus(
