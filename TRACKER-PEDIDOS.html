@@ -130,15 +130,21 @@
 
   /* ── Ícono SVG animado de máquina CNC (centro de maquinado vertical) ── */
   .machine-icon svg.cnc-svg { width: 100%; height: 100%; display: block; padding: 5px; }
-  .cnc-head { animation: cnc-plunge 1.3s ease-in-out infinite; }
+  .cnc-head { animation: cnc-plunge 1.1s ease-in-out infinite; transform-box: fill-box; }
   @keyframes cnc-plunge {
-    0%, 100% { transform: translateY(-1.5px); }
-    50%      { transform: translateY(2.5px); }
+    0%, 100% { transform: translateY(-1px); }
+    50%      { transform: translateY(2.2px); }
   }
   .cnc-spark { animation: cnc-spark .45s steps(1,end) infinite; }
   @keyframes cnc-spark {
     0%, 100% { opacity: 0; }
     50%      { opacity: 1; }
+  }
+  /* Torre de estatus (luz verde parpadeando: máquina operando) */
+  .cnc-light { animation: cnc-light 1.4s ease-in-out infinite; }
+  @keyframes cnc-light {
+    0%, 70%, 100% { opacity: 1; }
+    85%           { opacity: .3; }
   }
 
   /* ── Marcadores de fase ── */
@@ -733,27 +739,78 @@ function renderRow(p, colorIdx) {
               </svg>
               ` : `
               <svg class="cnc-svg" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <!-- base -->
-                <rect x="6" y="38" width="36" height="5" rx="1.5" fill="currentColor"/>
-                <!-- mesa -->
-                <rect x="12" y="34" width="24" height="4" rx="1" fill="currentColor" opacity=".5"/>
-                <!-- pieza de trabajo -->
-                <rect x="20" y="30" width="8" height="4" rx=".8" fill="currentColor" opacity=".8"/>
-                <!-- columna -->
-                <rect x="35" y="6" width="6" height="32" rx="1.5" fill="currentColor"/>
-                <!-- brazo superior -->
-                <rect x="15" y="6" width="26" height="5" rx="1.5" fill="currentColor"/>
-                <!-- cabezal / husillo (animado) -->
+                <!-- Torre de estatus (top: verde/amarillo/rojo) -->
+                <rect x="22" y="3" width="4" height="7" rx=".7" fill="#0f172a"/>
+                <circle class="cnc-light" cx="24" cy="4.7" r="1.1" fill="#22c55e"/>
+                <circle cx="24" cy="6.6" r="1" fill="#eab308" opacity=".55"/>
+                <circle cx="24" cy="8.5" r="1" fill="#dc2626" opacity=".55"/>
+
+                <!-- Banda de advertencia amarilla -->
+                <rect x="3" y="10.2" width="42" height="1.4" fill="#eab308"/>
+
+                <!-- Cuerpo principal -->
+                <rect x="3" y="11.6" width="42" height="28.4" rx="1" fill="#e2e8f0" stroke="#334155" stroke-width=".55"/>
+
+                <!-- Enclosure izquierdo (área de trabajo) -->
+                <rect x="4.5" y="13" width="21.5" height="26" fill="#f1f5f9" stroke="#64748b" stroke-width=".4"/>
+                <!-- Ventana (vidrio azul) -->
+                <rect x="6.2" y="14.7" width="18" height="13.5" fill="#7dd3fc" opacity=".55" stroke="#334155" stroke-width=".35"/>
+                <line x1="6.2" y1="21.5" x2="24.2" y2="21.5" stroke="#334155" stroke-width=".3" opacity=".45"/>
+                <!-- Manija de la puerta -->
+                <rect x="24.5" y="28.5" width=".9" height="6.5" fill="#475569"/>
+
+                <!-- Husillo / cabezal (animado dentro del enclosure) -->
                 <g class="cnc-head">
-                  <rect x="18.5" y="11" width="10" height="8" rx="1.5" fill="currentColor"/>
-                  <rect x="22.5" y="19" width="3" height="7" rx=".5" fill="currentColor"/>
-                  <polygon points="22.5,26 25.5,26 24,29" fill="currentColor"/>
+                  <rect x="12" y="14.6" width="8" height="3.5" rx=".4" fill="#475569"/>
+                  <rect x="14.5" y="18.1" width="3" height="3.6" fill="#334155"/>
+                  <rect x="15.3" y="21.5" width="1.4" height="3.6" fill="#0f172a"/>
+                  <polygon points="15.3,25 16.7,25 16,26.6" fill="#0f172a"/>
                   <g class="cnc-spark">
-                    <circle cx="24" cy="30" r="1.1" fill="#fbbf24"/>
-                    <circle cx="20.5" cy="31" r=".7" fill="#fde047"/>
-                    <circle cx="27.5" cy="31" r=".7" fill="#fde047"/>
+                    <circle cx="16" cy="27.6" r=".7" fill="#fbbf24"/>
+                    <circle cx="13.5" cy="28.4" r=".55" fill="#fde047"/>
+                    <circle cx="18.5" cy="28.4" r=".55" fill="#fde047"/>
                   </g>
                 </g>
+
+                <!-- Pieza + mesa de trabajo -->
+                <rect x="10" y="28.2" width="12" height="1.7" fill="#71717a"/>
+                <rect x="7" y="29.9" width="18" height="1.5" fill="#52525b"/>
+
+                <!-- Panel de control (derecha) -->
+                <rect x="26" y="13" width="18" height="26" fill="#f8fafc" stroke="#64748b" stroke-width=".4"/>
+                <!-- Pantalla CNC -->
+                <rect x="27.5" y="14.5" width="15" height="6" rx=".3" fill="#0f172a"/>
+                <rect x="28" y="15" width="14" height="5" fill="#0369a1"/>
+                <rect x="29" y="15.9" width="6" height=".55" fill="#7dd3fc" opacity=".85"/>
+                <rect x="29" y="17" width="9" height=".55" fill="#7dd3fc" opacity=".85"/>
+                <rect x="29" y="18.1" width="4" height=".55" fill="#7dd3fc" opacity=".85"/>
+                <rect x="29" y="19.2" width="7" height=".55" fill="#7dd3fc" opacity=".85"/>
+
+                <!-- Grid de botones -->
+                <g fill="#64748b">
+                  <circle cx="28.5" cy="23" r=".55"/><circle cx="31" cy="23" r=".55"/>
+                  <circle cx="33.5" cy="23" r=".55"/><circle cx="36" cy="23" r=".55"/>
+                  <circle cx="38.5" cy="23" r=".55"/><circle cx="41" cy="23" r=".55"/>
+                  <circle cx="28.5" cy="25.4" r=".55"/><circle cx="31" cy="25.4" r=".55"/>
+                  <circle cx="33.5" cy="25.4" r=".55"/><circle cx="36" cy="25.4" r=".55"/>
+                  <circle cx="38.5" cy="25.4" r=".55"/><circle cx="41" cy="25.4" r=".55"/>
+                  <circle cx="28.5" cy="27.8" r=".55"/><circle cx="31" cy="27.8" r=".55"/>
+                  <circle cx="33.5" cy="27.8" r=".55"/><circle cx="36" cy="27.8" r=".55"/>
+                  <circle cx="38.5" cy="27.8" r=".55"/><circle cx="41" cy="27.8" r=".55"/>
+                </g>
+
+                <!-- Botón de paro (E-stop) y arranque -->
+                <circle cx="30" cy="32.2" r="1.6" fill="#fbbf24"/>
+                <circle cx="30" cy="32.2" r="1.1" fill="#dc2626"/>
+                <circle cx="35.2" cy="32.2" r=".9" fill="#22c55e"/>
+                <!-- Perilla / handwheel -->
+                <circle cx="40" cy="34" r="1.4" fill="#e2e8f0" stroke="#334155" stroke-width=".3"/>
+                <line x1="40" y1="32.6" x2="40" y2="35.4" stroke="#334155" stroke-width=".35"/>
+
+                <!-- Base -->
+                <rect x="2" y="40" width="44" height="3" rx=".3" fill="#1e293b"/>
+                <rect x="5" y="43" width="4" height="2.4" fill="#0f172a"/>
+                <rect x="39" y="43" width="4" height="2.4" fill="#0f172a"/>
               </svg>
               `}
             </div>
