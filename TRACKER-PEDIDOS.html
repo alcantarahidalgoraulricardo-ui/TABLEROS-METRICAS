@@ -476,6 +476,12 @@ function phaseDoneDate(p, n) {
 // Deadline automático de Fase 4 (Encuesta): 3 días después de que PM y curso se realizó.
 // Se calcula en JS, ignorando cualquier deadline manual del Sheet.
 function encuestaDeadline(p) {
+  // Prioridad: deadline manual del Sheet (columna DEADLINE de Encuesta).
+  // El Sheet ya lo está llenando con la fecha real acordada por el negocio.
+  const manual = parseDate(p.deadlineF4);
+  if (manual) return manual;
+  // Fallback automático (solo si el Sheet aún no tiene deadline capturado):
+  // 3 días después de que PM y curso se realizó.
   const donePM = phaseDoneDate(p, 3);
   if (!donePM) return null;
   const d = new Date(donePM);
