@@ -158,14 +158,15 @@
   .kpi-value { font-size: 22px; font-weight: 700; color: #f1f5f9; line-height: 1; white-space:nowrap; }
   .kpi-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; line-height:1.2; }
 
-  /* ── Visor vertical: auto-scroll + scroll manual con el mouse ── */
+  /* ── Visor vertical: auto-scroll continuo + scroll manual con el mouse ──
+     Sin scroll-behavior:smooth — el desplazamiento automático mueve
+     scrollTop directamente cuadro a cuadro (rAF) para que fluya sin pasos. */
   .vslider-viewport {
     overflow-y: auto;
     overflow-x: hidden;
     position: relative;
     flex: 1 1 0;
     min-height: 0;
-    scroll-behavior: smooth;
   }
   /* Scrollbar discreto */
   .vslider-viewport::-webkit-scrollbar { width: 8px; }
@@ -306,10 +307,14 @@ const PHASES = ['HERRAMIENTA + DOC','ENVÍO Y DESCARGA','PM Y CURSO','ENCUESTA']
 // Estado global del visor
 let liveData     = [];
 let VISIBLE_ROWS = 1;
-let tickerIndex  = 0;
-let tickerTimer  = null;
 let cardHeight   = 0;
-let countdownVal = 30;
+let countdownVal = 120;
+
+// Estado del auto-scroll continuo e infinito
+let rafId            = null;
+let lastFrameTs       = null;
+let singleListHeight = 0;   // alto de UNA vuelta completa de tarjetas
+let pxPerMs           = 0;   // velocidad de lectura calculada
 
 // ─────────────────────────────────────────────────────────
 //  PARSEO DEL CSV
@@ -741,31 +746,43 @@ function renderTrackers() {
   const list     = document.getElementById('trackers');
   const viewport = document.getElementById('vsliderViewport');
 
-  // Paso 1 — render real para medir altura de tarjeta con el navegador
+  // Paso 1 — render real (una sola copia) para medir altura de tarjeta.
   buildList(liveData);
   cardHeight = (list.children[0] && list.children[0].offsetHeight) || 300;
 
-  // Paso 2 — cuántas caben en el espacio disponible de ventana
-  // El viewport ya ocupa todo el espacio restante vía CSS flex.
-  // Leemos su altura real para saber cuántas filas caben.
+  // Paso 2 — cuántas caben en el espacio disponible de ventana.
   const available = viewport.getBoundingClientRect().height;
   VISIBLE_ROWS = Math.max(
     1,
     Math.min(liveData.length, Math.floor(available / cardHeight))
   );
 
-  // Paso 3 — render real (sin duplicados; el loop se hace volviendo a top).
-  buildList(liveData);
+  // Paso 3 — si hay más pedidos de los que caben, duplicamos la lista UNA
+  // vez seguida de sí misma. Al desplazarse y llegar exactamente al alto de
+  // la primera copia, restamos ese alto al scrollTop: como la segunda copia
+  // es idéntica, el recorrido nunca se ve "reiniciar" — es un mismo lazo
+  // continuo e infinito.
+  const needsLoop = liveData.length > VISIBLE_ROWS;
+  buildList(needsLoop ? [...liveData, ...liveData] : liveData);
 
-  // Reset de posición (sin transform — ahora usamos scrollTop nativo)
+  singleListHeight = needsLoop && list.children[liveData.length]
+    ? list.children[liveData.length].offsetTop // medida real (incluye gaps)
+    : 0;
+
+  // Velocidad de lectura: 3.75 s por tarjeta (20% más rápido que el
+  // ritmo base de 4.5 s) — sigue siendo cómodo para leer folio, cliente,
+  // fase y fechas.
+  const SECONDS_PER_CARD = 3.75;
+  pxPerMs = cardHeight / (SECONDS_PER_CARD * 1000);
+
   viewport.scrollTop = 0;
-  tickerIndex = 0;
+  lastFrameTs = null;
 
   attachUserScrollDetection(viewport);
 }
 
 // ─────────────────────────────────────────────────────────
-//  TICKER + detección de scroll manual del usuario
+//  AUTO-SCROLL CONTINUO (rAF) + detección de scroll manual del usuario
 // ─────────────────────────────────────────────────────────
 let userScrolling   = false;
 let userScrollTimer = null;
@@ -779,8 +796,7 @@ function attachUserScrollDetection(viewport) {
     clearTimeout(userScrollTimer);
     userScrollTimer = setTimeout(() => {
       userScrolling = false;
-      // Sincronizar tickerIndex al lugar donde quedó el usuario
-      if (cardHeight) tickerIndex = Math.round(viewport.scrollTop / cardHeight);
+      lastFrameTs = null; // reanuda desde donde quedó, sin salto de tiempo
     }, 8000); // 8 s sin interactuar → vuelve el auto-scroll
   };
   viewport.addEventListener('wheel',      onInteract, { passive: true });
@@ -788,27 +804,36 @@ function attachUserScrollDetection(viewport) {
   viewport.addEventListener('mousedown',  onInteract, { passive: true });
 }
 
-function tickerStep() {
+// Un cuadro de animación = mover scrollTop una fracción de píxel según el
+// tiempo real transcurrido (no un salto fijo), por eso el recorrido fluye
+// sin pausas ni "pasos" perceptibles.
+function autoScrollFrame(ts) {
   const viewport = document.getElementById('vsliderViewport');
-  if (!cardHeight || liveData.length <= VISIBLE_ROWS) return;
-  if (userScrolling) return; // pausado mientras el usuario está navegando
+  const active = viewport && !userScrolling && liveData.length > VISIBLE_ROWS && singleListHeight > 0;
 
-  // Si ya está al fondo, vuelve a top
-  const atBottom = viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 2;
-  if (atBottom) {
-    tickerIndex = 0;
-    viewport.scrollTo({ top: 0, behavior: 'smooth' });
-    return;
+  if (active) {
+    if (lastFrameTs != null) {
+      // Límite de seguridad: si el navegador pausó un cuadro (pestaña en
+      // segundo plano, hipo del sistema), evita que se interprete como un
+      // salto grande — el recorrido sigue fluido en vez de brincar.
+      const dt = Math.min(ts - lastFrameTs, 50);
+      viewport.scrollTop += pxPerMs * dt;
+      if (viewport.scrollTop >= singleListHeight) {
+        viewport.scrollTop -= singleListHeight; // lazo infinito, sin reinicio visible
+      }
+    }
+    lastFrameTs = ts;
+  } else {
+    lastFrameTs = null;
   }
 
-  tickerIndex++;
-  viewport.scrollTo({ top: tickerIndex * cardHeight, behavior: 'smooth' });
+  rafId = requestAnimationFrame(autoScrollFrame);
 }
 
-function startTicker() {
-  if (tickerTimer) clearInterval(tickerTimer);
-  if (liveData.length <= VISIBLE_ROWS) return;
-  tickerTimer = setInterval(tickerStep, 4000);
+function startAutoScroll() {
+  if (rafId) cancelAnimationFrame(rafId);
+  lastFrameTs = null;
+  rafId = requestAnimationFrame(autoScrollFrame);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -842,8 +867,8 @@ function tickCountdown() {
 }
 
 function refreshData() {
-  countdownVal = 30;
-  document.getElementById('countdown').textContent = 30;
+  countdownVal = 120;
+  document.getElementById('countdown').textContent = 120;
   document.getElementById('lastUpdate').textContent =
     new Date().toLocaleTimeString('es-MX');
   hideStatus();
@@ -872,7 +897,7 @@ function refreshData() {
 
     renderTrackers();
     updateKPIs();
-    startTicker();
+    startAutoScroll();
   });
 }
 
@@ -892,15 +917,14 @@ function hideStatus() {
 //  INICIALIZACIÓN
 // ─────────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
-  if (tickerTimer) clearInterval(tickerTimer);
   renderTrackers();
-  startTicker();
+  startAutoScroll();
 });
 
 refreshData();                        // primera carga inmediata
 setInterval(tickCountdown, 1000);    // contador regresivo
 // Re-calcular VISIBLE_ROWS después de que estilos carguen completamente
-setTimeout(() => { renderTrackers(); startTicker(); }, 300);
+setTimeout(() => { renderTrackers(); startAutoScroll(); }, 300);
 </script>
 
 </body>
