@@ -474,6 +474,24 @@ function phaseDoneDate(p, n) {
   return null;
 }
 
+// Fecha de cierre real de un pedido para el auto-ocultado (Panel "3 días
+// después"). Si el Sheet no trae una fecha válida en FECHA de Encuesta
+// (vacía, "-", etc.), en vez de dejarlo visible para siempre, el tablero
+// recuerda en este navegador el primer día que lo detectó completo y
+// cuenta los 3 días desde ahí.
+function getClosedDate(p, today) {
+  const real = parseDate(p.fechaF4);
+  if (real) return real;
+
+  const key = 'pedidoCerrado_' + p.id;
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) return new Date(saved);
+    localStorage.setItem(key, today.toISOString());
+  } catch (e) { /* localStorage no disponible: se comporta como antes */ }
+  return today;
+}
+
 // Deadline automático de Fase 4 (Encuesta): 3 días después de que PM y curso se realizó.
 // Se calcula en JS, ignorando cualquier deadline manual del Sheet.
 function encuestaDeadline(p) {
@@ -864,13 +882,14 @@ function refreshData() {
 
   fetchData(pedidos => {
     // Auto-ocultar pedidos 100% completados 3 días después de la fecha de
-    // resultado de encuesta (cierre total del pedido).
+    // resultado de encuesta (cierre total del pedido). Si el Sheet no trae
+    // esa fecha, getClosedDate cuenta desde el primer día que se detectó
+    // completo (ver comentario en su definición).
     const today = new Date(); today.setHours(0,0,0,0);
     liveData = pedidos.filter(p => {
       const allDone = phaseDone(p, 1) && phaseDone(p, 2) && phaseDone(p, 3) && phaseDone(p, 4);
       if (!allDone) return true;
-      const closedAt = parseDate(p.fechaF4);
-      if (!closedAt) return true; // sin fecha registrada, no se oculta
+      const closedAt = getClosedDate(p, today);
       const hideAfter = new Date(closedAt);
       hideAfter.setDate(hideAfter.getDate() + 3);
       return today <= hideAfter;
