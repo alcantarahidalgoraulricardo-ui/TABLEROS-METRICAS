@@ -186,6 +186,7 @@
     .month-chip-split .mh { color: var(--hot); }
     .month-chip-split .mw { color: var(--warm); }
     .month-chip-split .sep { color: var(--text-dim); margin: 0 3px; }
+    .month-chip-split .ms { color: var(--green); }
 
     .month-empty {
       font-size: 12px;
@@ -228,6 +229,65 @@
     .sv-hot   { color: var(--hot); }
     .sv-warm  { color: var(--warm); }
     .sv-total { color: var(--accent); }
+    .sv-closed{ color: var(--green); }
+
+    .sd-closed { background: var(--green); box-shadow: 0 0 12px rgba(0,230,118,.45); }
+
+    /* ─── META MENSUAL DE VENTAS CERRADAS ─── */
+    .stat-closed {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 4px 10px;
+      transition: border-color .4s ease, background .4s ease, box-shadow .4s ease;
+    }
+
+    .stat-closed.goal-reached {
+      border-color: var(--green);
+      background: rgba(0,230,118,.07);
+      box-shadow: 0 0 18px rgba(0,230,118,.22);
+    }
+
+    .goal-bar {
+      margin-top: 5px;
+      height: 4px;
+      background: rgba(255,255,255,.09);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .goal-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--green);
+      border-radius: 3px;
+      transition: width .6s ease;
+    }
+
+    .goal-text {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-2);
+      margin-top: 3px;
+      letter-spacing: .5px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .goal-badge {
+      display: none;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #06210f;
+      background: var(--green);
+      padding: 2px 7px;
+      border-radius: 20px;
+      margin-left: 6px;
+      white-space: nowrap;
+    }
+
+    .stat-closed.goal-reached .goal-badge { display: inline-block; }
+    .stat-closed.goal-reached .goal-text  { color: var(--green); }
 
     /* ─── MAIN ─── */
     .main {
@@ -290,9 +350,10 @@
     .badge {
       font-size: 10px;
       font-weight: 800;
-      letter-spacing: 1px;
-      padding: 3px 9px;
+      letter-spacing: .5px;
+      padding: 3px 7px;
       border-radius: 20px;
+      white-space: nowrap;
     }
 
     .badge-hot  { background: rgba(255,77,77,.12);  border: 1px solid var(--hot);  color: var(--hot); }
@@ -360,6 +421,11 @@
 
     .tag-hot  { color: var(--hot); }
     .tag-warm { color: var(--warm); }
+    .tag-sold { color: var(--green); }
+
+    .dot-sold { background: var(--green); box-shadow: 0 0 7px rgba(0,230,118,.55); }
+    .badge-sold { background: rgba(0,230,118,.12); border: 1px solid var(--green); color: var(--green); }
+    .row-sold { background: rgba(0,230,118,.05); }
 
     .row-right { flex-shrink: 0; text-align: right; }
 
@@ -392,6 +458,7 @@
     .month-chip-money .mh { color: var(--hot); }
     .month-chip-money .mw { color: var(--warm); }
     .month-chip-money .sep { color: var(--text-dim); margin: 0 3px; }
+    .month-chip-money .ms { color: var(--green); }
 
     .card-empty {
       padding: 28px 18px;
@@ -494,6 +561,16 @@
           <div class="stat-money" id="moneyWarm">—</div>
         </div>
       </div>
+      <div class="stat stat-closed" id="statClosed">
+        <div class="stat-dot sd-closed"></div>
+        <div>
+          <div class="stat-label">Cerradas <span id="closedMonth"></span><span class="goal-badge">&#127942; META</span></div>
+          <div class="stat-val sv-closed" id="totalClosed">&mdash;</div>
+          <div class="stat-money" id="moneyClosed">&mdash;</div>
+          <div class="goal-bar"><div class="goal-fill" id="goalFill"></div></div>
+          <div class="goal-text" id="goalText">&mdash;</div>
+        </div>
+      </div>
       <div class="stat">
         <div class="stat-dot sd-total"></div>
         <div>
@@ -543,6 +620,7 @@
 
   const CSV_URL  = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQYvDuMPkNWnvsJtwlxEutaojZoy2cm95zDVWhodSoH52e2FFJUN384jfohBVUdLA/pub?gid=466059784&single=true&output=csv';
   const INTERVAL = 60; // segundos entre actualizaciones
+  const META_MENSUAL = 80000; // meta mensual del equipo en ventas cerradas
 
   let cdVal = INTERVAL;
 
@@ -587,7 +665,7 @@
         const rating  = parseInt((row[col + 2] || '').trim(), 10);
         const monto   = parseMonto(row[col + 3] || '');
         const fc      = (row[col + 4] || '').trim();
-        if (client && (rating === 1 || rating === 2)) {
+        if (client && (rating === 0 || rating === 1 || rating === 2)) {
           vendor.clients.push({ client, product, rating, fc, monto });
         }
       });
@@ -639,49 +717,72 @@
   /* ── Agrupar oportunidades por mes de cierre (monto separado por caliente/tibia) ── */
   function buildForecast(vendors) {
     const map = new Map();
-    const sinFecha = { hot: 0, warm: 0, hotMonto: 0, warmMonto: 0 };
+    const sinFecha = { label: 'Sin fecha', hot: 0, warm: 0, closed: 0, hotMonto: 0, warmMonto: 0, closedMonto: 0 };
     vendors.forEach(v => v.clients.forEach(c => {
       const mk = c.fc ? monthKey(c.fc) : null;
       let bucket;
       if (!mk) {
         bucket = sinFecha;
       } else {
-        if (!map.has(mk.label)) map.set(mk.label, { label: mk.label, order: mk.order, hot: 0, warm: 0, hotMonto: 0, warmMonto: 0 });
+        if (!map.has(mk.label)) map.set(mk.label, { label: mk.label, order: mk.order, hot: 0, warm: 0, closed: 0, hotMonto: 0, warmMonto: 0, closedMonto: 0 });
         bucket = map.get(mk.label);
       }
-      if (c.rating === 1) { bucket.hot++;  bucket.hotMonto  += c.monto || 0; }
-      else                { bucket.warm++; bucket.warmMonto += c.monto || 0; }
+      if (c.rating === 0)      { bucket.closed++; bucket.closedMonto += c.monto || 0; }
+      else if (c.rating === 1) { bucket.hot++;    bucket.hotMonto    += c.monto || 0; }
+      else                     { bucket.warm++;   bucket.warmMonto   += c.monto || 0; }
     }));
     const months = [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
     return { months, sinFecha };
   }
 
-  function chipHTML(label, hot, warm, hotMonto, warmMonto, dim) {
+  /* Une solo las partes con valor, separadas por el punto medio */
+  function joinParts(parts) {
+    return parts.filter(Boolean).join('<span class="sep">\u00b7</span>');
+  }
+
+  function chipHTML(m, dim) {
+    const sold = m.closed || 0;
     return `
       <div class="month-chip${dim ? ' month-chip-dim' : ''}">
-        <div class="month-chip-label">${esc(label)}</div>
-        <div class="month-chip-total">${hot + warm}</div>
-        <div class="month-chip-split"><span class="mh">${hot}</span><span class="sep">·</span><span class="mw">${warm}</span></div>
-        <div class="month-chip-money"><span class="mh">${fmtMoney(hotMonto)}</span><span class="sep">·</span><span class="mw">${fmtMoney(warmMonto)}</span></div>
+        <div class="month-chip-label">${esc(m.label)}</div>
+        <div class="month-chip-total">${m.hot + m.warm + sold}</div>
+        <div class="month-chip-split">${joinParts([
+          m.hot  ? `<span class="mh">${m.hot}</span>`  : '',
+          m.warm ? `<span class="mw">${m.warm}</span>` : '',
+          sold   ? `<span class="ms">&#10004;${sold}</span>` : ''])}</div>
+        <div class="month-chip-money">${joinParts([
+          m.hot  ? `<span class="mh">${fmtMoney(m.hotMonto)}</span>`  : '',
+          m.warm ? `<span class="mw">${fmtMoney(m.warmMonto)}</span>` : '',
+          sold   ? `<span class="ms">${fmtMoney(m.closedMonto)}</span>` : ''])}</div>
       </div>`;
   }
 
   function renderForecast(vendors) {
     const { months, sinFecha } = buildForecast(vendors);
-    const chips = months.map(m => chipHTML(m.label, m.hot, m.warm, m.hotMonto, m.warmMonto));
-    if (sinFecha.hot + sinFecha.warm > 0) chips.push(chipHTML('Sin fecha', sinFecha.hot, sinFecha.warm, sinFecha.hotMonto, sinFecha.warmMonto, true));
+    const chips = months.map(m => chipHTML(m));
+    if (sinFecha.hot + sinFecha.warm + sinFecha.closed > 0) chips.push(chipHTML(sinFecha, true));
     document.getElementById('monthForecast').innerHTML =
       chips.length ? chips.join('') : '<div class="month-empty">Sin fechas de cierre registradas</div>';
   }
 
   /* ── Renderizar tarjetas ── */
   function render(vendors) {
+    // El contador de cerradas es del MES EN CURSO: se renueva solo cada dia 1.
+    const mesActual = MONTH_ORDER[new Date().getMonth()];
+
     let hot = 0, warm = 0, hotMoney = 0, warmMoney = 0;
+    let closed = 0, closedMoney = 0;
+
     vendors.forEach(v => v.clients.forEach(c => {
-      if (c.rating === 1) { hot++;  hotMoney  += c.monto || 0; }
-      else                { warm++; warmMoney += c.monto || 0; }
+      if (c.rating === 0) {
+        const mk = c.fc ? monthKey(c.fc) : null;
+        if (mk && mk.label === mesActual) { closed++; closedMoney += c.monto || 0; }
+      }
+      else if (c.rating === 1) { hot++;  hotMoney  += c.monto || 0; }
+      else if (c.rating === 2) { warm++; warmMoney += c.monto || 0; }
     }));
 
+    // TOTAL = solo pipeline abierto (calientes + tibias)
     document.getElementById('totalHot').textContent  = hot;
     document.getElementById('totalWarm').textContent = warm;
     document.getElementById('totalAll').textContent  = hot + warm;
@@ -689,6 +790,15 @@
     document.getElementById('moneyHot').textContent  = fmtMoney(hotMoney);
     document.getElementById('moneyWarm').textContent = fmtMoney(warmMoney);
     document.getElementById('moneyAll').textContent  = fmtMoney(hotMoney + warmMoney);
+
+    // Ventas cerradas del mes en curso vs meta del equipo
+    const pct = META_MENSUAL > 0 ? (closedMoney / META_MENSUAL) * 100 : 0;
+    document.getElementById('closedMonth').textContent  = mesActual.slice(0, 3);
+    document.getElementById('totalClosed').textContent  = closed;
+    document.getElementById('moneyClosed').textContent  = fmtMoney(closedMoney);
+    document.getElementById('goalFill').style.width     = Math.min(100, pct).toFixed(1) + '%';
+    document.getElementById('goalText').textContent     = 'Meta ' + fmtMoney(META_MENSUAL) + ' \u00b7 ' + Math.round(pct) + '%';
+    document.getElementById('statClosed').classList.toggle('goal-reached', closedMoney >= META_MENSUAL);
 
     renderForecast(vendors);
 
@@ -701,27 +811,32 @@
     grid.innerHTML = vendors.map(v => {
       const hotC  = v.clients.filter(c => c.rating === 1);
       const warmC = v.clients.filter(c => c.rating === 2);
-      const sorted = [...hotC, ...warmC]; // calientes primero
+      const soldC = v.clients.filter(c => c.rating === 0);
+      const sorted = [...hotC, ...warmC, ...soldC]; // calientes, tibias, vendidas al final
 
       const badges = [
-        hotC.length  ? `<span class="badge badge-hot">${hotC.length} CALIENTE${hotC.length > 1 ? 'S' : ''}</span>`  : '',
-        warmC.length ? `<span class="badge badge-warm">${warmC.length} TIBIA${warmC.length > 1 ? 'S' : ''}</span>` : '',
+        hotC.length  ? `<span class="badge badge-hot" title="Calientes">${hotC.length} CAL</span>`  : '',
+        warmC.length ? `<span class="badge badge-warm" title="Tibias">${warmC.length} TIB</span>` : '',
+        soldC.length ? `<span class="badge badge-sold" title="Vendidas">&#10004; ${soldC.length}</span>` : '',
       ].join('');
 
       const rows = sorted.length
-        ? sorted.map(c => `
-            <div class="client-row">
-              <div class="row-dot ${c.rating === 1 ? 'dot-hot' : 'dot-warm'}"></div>
+        ? sorted.map(c => {
+            const k   = c.rating === 0 ? 'sold' : (c.rating === 1 ? 'hot' : 'warm');
+            const txt = c.rating === 0 ? 'VENDIDA' : (c.rating === 1 ? 'CALIENTE' : 'TIBIA');
+            return `
+            <div class="client-row${c.rating === 0 ? ' row-sold' : ''}">
+              <div class="row-dot dot-${k}"></div>
               <div class="client-info">
                 <div class="client-name">${esc(c.client)}</div>
                 ${c.product ? `<div class="client-product">${esc(c.product)}</div>` : ''}
-                ${c.fc ? `<div class="client-fc">&#128197; Cierre: ${esc(c.fc)}</div>` : ''}
+                ${c.fc ? `<div class="client-fc">${c.rating === 0 ? '&#10004; Cerrada:' : '&#128197; Cierre:'} ${esc(c.fc)}</div>` : ''}
               </div>
               <div class="row-right">
-                <span class="row-tag ${c.rating === 1 ? 'tag-hot' : 'tag-warm'}">${c.rating === 1 ? 'CALIENTE' : 'TIBIA'}</span>
+                <span class="row-tag tag-${k}">${txt}</span>
                 ${c.monto ? `<div class="lead-monto">${fmtMoney(c.monto)}</div>` : ''}
               </div>
-            </div>`).join('')
+            </div>`; }).join('')
         : '<div class="card-empty">Sin oportunidades registradas</div>';
 
       return `
