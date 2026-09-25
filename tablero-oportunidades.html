@@ -812,7 +812,11 @@
       const hotC  = v.clients.filter(c => c.rating === 1);
       const warmC = v.clients.filter(c => c.rating === 2);
       const soldC = v.clients.filter(c => c.rating === 0);
-      const sorted = [...hotC, ...warmC, ...soldC]; // calientes, tibias, vendidas al final
+      // Orden cronologico por mes de cierre; dentro del mes: caliente, tibia, vendida.
+      // Los leads sin F.C. quedan al final (order 99).
+      const mesOrd = c => { const mk = c.fc ? monthKey(c.fc) : null; return mk ? mk.order : 99; };
+      const calOrd = c => (c.rating === 1 ? 0 : c.rating === 2 ? 1 : 2);
+      const sorted = [...v.clients].sort((a, b) => mesOrd(a) - mesOrd(b) || calOrd(a) - calOrd(b));
 
       const badges = [
         hotC.length  ? `<span class="badge badge-hot" title="Calientes">${hotC.length} CAL</span>`  : '',
