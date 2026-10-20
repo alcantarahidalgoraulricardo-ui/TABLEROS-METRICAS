@@ -263,6 +263,8 @@
       gap: 10px;
     }
 
+    .breakdown-2 { grid-template-columns: repeat(2, 1fr); margin-top: 10px; }
+
     .brk {
       background: rgba(255,255,255,.04);
       border: 1px solid rgba(255,255,255,.05);
@@ -361,30 +363,56 @@ function findRow(rows, ...keywords) {
   });
 }
 
-/* ── parse CSV ────────────────────────── */
+/* ── parse CSV (detecta columnas por encabezado) ── */
+const clean = v => String(v || '').trim();
+const catCls = n => /RETRO/i.test(n) ? 'ret' : /CONV/i.test(n) ? 'conv' : 'cnc';
+const catName = n => /RETRO/i.test(n) ? 'Retrofit' : /CONV/i.test(n) ? 'Equipos Convencionales' : 'Equipos CNC';
+
+function metricKey(h) {
+  if (/NUEVO/i.test(h))    return 'nuevo';
+  if (/RECOMPRA/i.test(h)) return 'recompra';
+  if (/PYR/i.test(h))      return 'pyr';
+  if (/CONV/i.test(h))     return 'conv';
+  if (/CNC/i.test(h))      return 'cnc';
+  return null;
+}
+
 function parse(rows) {
+  // Categorías: cada celda "OBJETIVO" tiene su valor en la celda siguiente
   const objIdx  = rows.findIndex(r => r.filter(c => /OBJETIVO/i.test(c)).length >= 2);
-  const realIdx = rows.findIndex(r => r.filter(c => /^REAL\s*$/i.test(c)).length >= 2);
-  const nameIdx = findRow(rows, 'RICARDO', 'JOSHUA');
-  const subIdx  = findRow(rows, 'RECOMPRA', 'PYR');
+  const realIdx = rows.findIndex(r => r.filter(c => /^REAL$/i.test(clean(c))).length >= 2);
+  const obj = rows[objIdx] || [], real = rows[realIdx] || [], head = rows[objIdx - 1] || [];
 
-  const obj   = rows[objIdx]       || [];
-  const real  = rows[realIdx]      || [];
-  const names = rows[nameIdx]      || [];
-  const data  = rows[subIdx + 1]   || [];
+  const categories = [];
+  obj.forEach((c, i) => {
+    if (!/OBJETIVO/i.test(c)) return;
+    const title = clean(head[i]);
+    categories.push({
+      name: catName(title), cls: catCls(title),
+      objetivo: num(obj[i + 1]), real: num(real[i + 1])
+    });
+  });
 
-  return {
-    categories: [
-      { name: 'Equipos CNC',            cls: 'cnc',  objetivo: num(obj[2]),  real: num(real[2])  },
-      { name: 'Equipos Convencionales', cls: 'conv', objetivo: num(obj[5]),  real: num(real[5])  },
-      { name: 'Retrofit',               cls: 'ret',  objetivo: num(obj[8]),  real: num(real[8])  },
-    ],
-    salespeople: [
-      { name: names[0], av: 0, nuevo: num(data[0]), recompra: num(data[1]), pyr: num(data[2])  },
-      { name: names[4], av: 1, nuevo: num(data[4]), recompra: num(data[5]), pyr: num(data[6])  },
-      { name: names[8], av: 2, nuevo: num(data[8]), recompra: num(data[9]), pyr: num(data[10]) },
-    ]
-  };
+  // Vendedores: fila de nombres + fila de encabezados + fila de datos
+  const subIdx = findRow(rows, 'RECOMPRA', 'PYR');
+  const names  = rows[subIdx - 1] || [];
+  const subs   = rows[subIdx] || [];
+  const data   = rows[subIdx + 1] || [];
+
+  const starts = names.map((c, i) => clean(c) ? i : -1).filter(i => i >= 0);
+  const salespeople = starts.map((start, k) => {
+    const end = k + 1 < starts.length ? starts[k + 1] : subs.length;
+    // quita el texto entre comillas ("CUENTA REGRESIVA") del nombre
+    const name = clean(names[start]).replace(/"[^"]*"/g, '').replace(/"/g, '').trim();
+    const p = { name, av: k % 3 };
+    for (let i = start; i < end; i++) {
+      const key = metricKey(clean(subs[i]));
+      if (key) p[key] = num(data[i]);
+    }
+    return p;
+  });
+
+  return { categories, salespeople };
 }
 
 /* ── render ───────────────────────────── */
@@ -420,10 +448,11 @@ function renderCategories(cats) {
 }
 
 function renderSales(people) {
+  const box = (v, l) => `<div class="brk"><div class="brk-val">${v || 0}</div><div class="brk-label">${l}</div></div>`;
   document.getElementById('sales-grid').innerHTML = people.map(s => {
     const name  = (s.name || '').trim();
     // Números son cuenta regresiva: pendientes por cerrar
-    const total = s.nuevo + s.recompra + s.pyr;
+    const total = (s.nuevo || 0) + (s.recompra || 0) + (s.pyr || 0);
     return `
     <div class="sales-card">
       <div class="sales-header">
@@ -431,21 +460,13 @@ function renderSales(people) {
         <div class="sales-name">${name}</div>
       </div>
       <div class="breakdown">
-        <div class="brk">
-          <div class="brk-val">${s.nuevo}</div>
-          <div class="brk-label">Cliente<br>Nuevo</div>
-        </div>
-        <div class="brk">
-          <div class="brk-val">${s.recompra}</div>
-          <div class="brk-label">Recompra</div>
-        </div>
-        <div class="brk">
-          <div class="brk-val">${s.pyr}</div>
-          <div class="brk-label">PYR</div>
-        </div>
+        ${box(s.nuevo, 'Cliente<br>Nuevo')}${box(s.recompra, 'Recompra')}${box(s.pyr, 'PYR')}
+      </div>
+      <div class="breakdown breakdown-2">
+        ${box(s.conv, '# Equipos<br>Conv')}${box(s.cnc, '# Equipos<br>CNC')}
       </div>
       <div class="sales-footer">
-        <span class="sf-label">Total pendiente por cerrar</span>
+        <span class="sf-label">Total clientes pendientes</span>
         <span class="sf-total">${total}</span>
       </div>
     </div>`;
@@ -465,8 +486,8 @@ function load() {
   fetch(CSV_URL + '&t=' + Date.now(), { cache: 'no-store' })
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
     .then(csvText => {
-      const clean = csvText.replace(/\r/g, '');
-      const { data } = Papa.parse(clean, { skipEmptyLines: false });
+      const csv = csvText.replace(/\r/g, '');
+      const { data } = Papa.parse(csv, { skipEmptyLines: false });
       const { categories, salespeople } = parse(data);
       renderCategories(categories);
       renderSales(salespeople);
