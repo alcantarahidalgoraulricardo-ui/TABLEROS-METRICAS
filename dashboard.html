@@ -172,7 +172,8 @@
     }
 
     .num-real  .num-big { color: #fff; }
-    .num-obj   .num-big { color: #2d3557; }
+    .num-obj   .num-big { color: #aab8e0; }
+    .num-obj   .num-label { color: #aab8e0; font-weight: 700; }
 
     .num-label {
       font-size: clamp(9px, 0.85vw, 11px);
@@ -184,7 +185,7 @@
 
     .slash {
       font-size: clamp(24px, 2.5vw, 36px);
-      color: #1e2540;
+      color: #55608a;
       padding-bottom: 10px;
       flex-shrink: 0;
     }
@@ -264,6 +265,14 @@
     }
 
     .breakdown-2 { grid-template-columns: repeat(2, 1fr); margin-top: 10px; }
+
+    .brk-eq { padding: clamp(16px, 2vw, 26px) 8px; }
+    .brk-eq .brk-val { font-size: clamp(44px, 5.5vw, 76px); }
+    .brk-eq .brk-label { font-size: clamp(10px, 0.95vw, 13px); font-weight: 700; letter-spacing: 1px; }
+    .brk-conv { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.55); }
+    .brk-conv .brk-val, .brk-conv .brk-label { color: var(--conv1); }
+    .brk-cnc  { background: rgba(59,130,246,.12); border-color: rgba(59,130,246,.55); }
+    .brk-cnc .brk-val, .brk-cnc .brk-label { color: #60a5fa; }
 
     .brk {
       background: rgba(255,255,255,.04);
@@ -448,7 +457,7 @@ function renderCategories(cats) {
 }
 
 function renderSales(people) {
-  const box = (v, l) => `<div class="brk"><div class="brk-val">${v || 0}</div><div class="brk-label">${l}</div></div>`;
+  const box = (v, l, c = '') => `<div class="brk ${c}"><div class="brk-val">${v || 0}</div><div class="brk-label">${l}</div></div>`;
   document.getElementById('sales-grid').innerHTML = people.map(s => {
     const name  = (s.name || '').trim();
     // Números son cuenta regresiva: pendientes por cerrar
@@ -463,7 +472,7 @@ function renderSales(people) {
         ${box(s.nuevo, 'Cliente<br>Nuevo')}${box(s.recompra, 'Recompra')}${box(s.pyr, 'PYR')}
       </div>
       <div class="breakdown breakdown-2">
-        ${box(s.conv, '# Equipos<br>Conv')}${box(s.cnc, '# Equipos<br>CNC')}
+        ${box(s.conv, '# Equipos<br>Conv', 'brk-eq brk-conv')}${box(s.cnc, '# Equipos<br>CNC', 'brk-eq brk-cnc')}
       </div>
       <div class="sales-footer">
         <span class="sf-label">Total clientes pendientes</span>
