@@ -220,6 +220,104 @@
       color: var(--muted);
     }
 
+    /* ── META ALCANZADA ─────────────────────── */
+    .cat-card.goal {
+      border-color: rgba(34,197,94,.6);
+      background: linear-gradient(180deg, rgba(34,197,94,.14), var(--surface) 75%);
+      animation: goalGlow 2.4s ease-in-out infinite;
+    }
+
+    .goal .stripe {
+      height: 6px;
+      background: linear-gradient(90deg, #16a34a, #4ade80, #16a34a);
+      background-size: 200% 100%;
+      animation: goalSlide 3s linear infinite;
+    }
+
+    .goal .cat-name { color: #86efac; }
+
+    .goal .num-real .num-big {
+      color: #4ade80;
+      text-shadow: 0 0 28px rgba(34,197,94,.55);
+      animation: goalPop .9s cubic-bezier(.2,1.6,.4,1) both;
+    }
+
+    .goal .num-real .num-label { color: #86efac; }
+
+    .goal .bar-track { height: 10px; background: rgba(34,197,94,.15); }
+
+    .goal .bar-fill {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(90deg, #16a34a, #4ade80);
+      box-shadow: 0 0 14px rgba(34,197,94,.7);
+    }
+
+    .goal .bar-fill::after {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      width: 35%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent);
+      animation: goalShine 2.2s ease-in-out infinite;
+    }
+
+    .goal .bar-pct, .goal .bar-gap { color: #4ade80; font-weight: 700; }
+
+    .goal-badge {
+      position: absolute;
+      top: clamp(16px, 1.8vw, 26px);
+      right: clamp(16px, 1.8vw, 26px);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--green);
+      color: #04210f;
+      padding: 7px 16px;
+      border-radius: 999px;
+      font-size: clamp(11px, 1.05vw, 15px);
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      box-shadow: 0 0 22px rgba(34,197,94,.6);
+      animation: goalBadgeIn .7s cubic-bezier(.2,1.6,.4,1) both, goalBadgePulse 1.8s ease-in-out .7s infinite;
+    }
+
+    @keyframes goalGlow {
+      0%,100% { box-shadow: 0 0 0 1px rgba(34,197,94,.25), 0 0 18px rgba(34,197,94,.18); }
+      50%     { box-shadow: 0 0 0 2px rgba(34,197,94,.65), 0 0 46px rgba(34,197,94,.45); }
+    }
+    @keyframes goalSlide { to { background-position: -200% 0; } }
+    @keyframes goalShine { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
+    @keyframes goalPop {
+      0%   { transform: scale(.5); opacity: 0; }
+      70%  { transform: scale(1.18); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+    @keyframes goalBadgeIn {
+      0%   { transform: translateY(-14px) scale(.6); opacity: 0; }
+      100% { transform: none; opacity: 1; }
+    }
+    @keyframes goalBadgePulse {
+      0%,100% { transform: scale(1); }
+      50%     { transform: scale(1.07); }
+    }
+
+    /* confeti: lienzo encima de todo, no estorba los clics */
+    #fx {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 50;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cat-card.goal, .goal .stripe, .goal .bar-fill::after,
+      .goal .num-real .num-big, .goal-badge { animation: none; }
+    }
+
     /* ── SALESPERSON CARDS ──────────────────── */
     .sales-card {
       background: var(--surface);
@@ -352,6 +450,7 @@
 <div class="grid-3" id="sales-grid"></div>
 
 <div id="status-msg"></div>
+<canvas id="fx" aria-hidden="true"></canvas>
 
 <script>
 const CSV_URL =
@@ -430,9 +529,12 @@ function renderCategories(cats) {
     // REAL es ascendente: valor ya vendido
     const p   = pct(c.real, c.objetivo);
     const gap = Math.max(0, c.objetivo - c.real);
+    // Meta alcanzada: REAL llegó (o pasó) al OBJETIVO → tarjeta en verde
+    const goal = c.objetivo > 0 && c.real >= c.objetivo;
     return `
-    <div class="cat-card ${c.cls}">
+    <div class="cat-card ${c.cls}${goal ? ' goal' : ''}">
       <div class="stripe"></div>
+      ${goal ? '<div class="goal-badge"><span>✓</span>Meta alcanzada</div>' : ''}
       <div class="cat-name">${c.name}</div>
       <div class="nums">
         <div class="num-block num-real">
@@ -454,7 +556,74 @@ function renderCategories(cats) {
       </div>
     </div>`;
   }).join('');
+  celebrate();
 }
+
+/* ── confeti al llegar a la meta ──────── */
+// Se lanza en cada actualización (cada 60 s) mientras haya una categoría en meta.
+const fx = document.getElementById('fx');
+const fxCtx = fx.getContext('2d');
+const FX_COLORS = ['#22c55e', '#4ade80', '#bbf7d0', '#facc15', '#ffffff', '#38bdf8'];
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let fxParts = [], fxRunning = false;
+
+function fxResize() {
+  const d = window.devicePixelRatio || 1;
+  fx.width = innerWidth * d;
+  fx.height = innerHeight * d;
+  fxCtx.setTransform(d, 0, 0, d, 0, 0);
+}
+
+function celebrate() {
+  if (reduceMotion) return;
+  document.querySelectorAll('.cat-card.goal').forEach(card => {
+    const r = card.getBoundingClientRect();
+    for (let i = 0; i < 90; i++) {
+      fxParts.push({
+        x: r.left + r.width * Math.random(),
+        y: r.top + r.height * 0.4,
+        vx: (Math.random() - 0.5) * 8,
+        vy: -(4 + Math.random() * 8),
+        w: 5 + Math.random() * 6,
+        h: 8 + Math.random() * 9,
+        rot: Math.random() * 6.28,
+        vr: (Math.random() - 0.5) * 0.35,
+        color: FX_COLORS[Math.floor(Math.random() * FX_COLORS.length)],
+        life: 0,
+        max: 170 + Math.random() * 90
+      });
+    }
+  });
+  if (!fxRunning && fxParts.length) {
+    fxRunning = true;
+    fxResize();
+    requestAnimationFrame(fxTick);
+  }
+}
+
+function fxTick() {
+  fxCtx.clearRect(0, 0, innerWidth, innerHeight);
+  fxParts = fxParts.filter(p => p.life < p.max && p.y < innerHeight + 30);
+  for (const p of fxParts) {
+    p.life++;
+    p.vy += 0.16;
+    p.vx *= 0.99;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.rot += p.vr;
+    fxCtx.save();
+    fxCtx.globalAlpha = Math.min(1, (p.max - p.life) / 40);
+    fxCtx.translate(p.x, p.y);
+    fxCtx.rotate(p.rot);
+    fxCtx.fillStyle = p.color;
+    fxCtx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    fxCtx.restore();
+  }
+  if (fxParts.length) requestAnimationFrame(fxTick);
+  else fxRunning = false;
+}
+
+window.addEventListener('resize', fxResize);
 
 function renderSales(people) {
   const box = (v, l, c = '') => `<div class="brk ${c}"><div class="brk-val">${v || 0}</div><div class="brk-label">${l}</div></div>`;
